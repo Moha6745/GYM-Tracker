@@ -670,33 +670,39 @@ window._onRemoteUpdate = (remote) => {
   toast('📡 Synced from another device');
 };
 
-// ─── INIT — wait for Firebase then load ───────────────────────────────────────
+// ─── INIT — load instantly from localStorage, sync Firebase in background ─────
 async function initApp() {
-  // Try Firebase first
-  let loaded = null;
-  if (window._fbReady && window._fbLoad) {
-    loaded = await window._fbLoad();
-  }
-  // Fallback to localStorage
-  if (!loaded) {
-    const local = localStorage.getItem('gymData');
-    loaded = local ? JSON.parse(local) : null;
-  }
-  // Migrate old data with restDuration
-  if (loaded && loaded.restDuration !== undefined) {
-    delete loaded.restDuration; loaded = null;
-  }
-  data = loaded || initData;
+  // 1. Load local data immediately so UI shows right away
+  const local = localStorage.getItem('gymData');
+  let localData = local ? JSON.parse(local) : null;
+  if (localData && localData.restDuration !== undefined) { delete localData.restDuration; localData = null; }
+  data = localData || initData;
   window._currentData = data;
-  // Hide loading screen
-  const ls = document.getElementById('loading-screen');
-  if (ls) ls.style.display = 'none';
-  setSyncStatus('saved');
+  document.getElementById('loading-screen').style.display = 'none';
   renderLog();
+
+  // 2. Then try to load from Firebase and merge if newer
+  if (window._fbLoad) {
+    try {
+      const remote = await window._fbLoad();
+      if (remote && JSON.stringify(remote) !== JSON.stringify(data)) {
+        data = remote;
+        window._currentData = remote;
+        localStorage.setItem('gymData', JSON.stringify(data));
+        renderLog();
+        toast('📡 Data loaded from cloud');
+      }
+      setSyncStatus('saved');
+    } catch(e) {
+      setSyncStatus('error');
+    }
+  } else {
+    setSyncStatus('error');
+  }
 }
 
 document.addEventListener('fb-ready', initApp);
-// Fallback: if Firebase takes too long (>4s), start with local data
+// Fallback: start immediately with local data, Firebase syncs in background
 setTimeout(() => {
   if (document.getElementById('loading-screen')?.style.display !== 'none') {
     console.warn('Firebase timeout — using local data');
@@ -707,7 +713,7 @@ setTimeout(() => {
     setSyncStatus('error');
     renderLog();
   }
-}, 4000);
+}, 2500);
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
 function showPage(id) {
