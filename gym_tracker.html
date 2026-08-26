@@ -5,6 +5,59 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>💪 Workout Tracker</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAIPv1yE0_QMZT_NXfm0WDd5z49GS9mpnE",
+  authDomain: "gym-tracker-92115.firebaseapp.com",
+  projectId: "gym-tracker-92115",
+  storageBucket: "gym-tracker-92115.firebasestorage.app",
+  messagingSenderId: "371078168205",
+  appId: "1:371078168205:web:1fc61ba97e6c5e4ee3acc4"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+const DOC = doc(db, 'users', 'moha6745');
+
+// expose to global scope so non-module script can use
+window._fbSave = async (dataObj) => {
+  try {
+    await setDoc(DOC, { payload: JSON.stringify(dataObj) }, { merge: true });
+    setSyncStatus('saved');
+  } catch(e) { console.error('Firebase save error', e); setSyncStatus('error'); }
+};
+
+window._fbLoad = async () => {
+  try {
+    const snap = await getDoc(DOC);
+    if (snap.exists() && snap.data().payload) {
+      return JSON.parse(snap.data().payload);
+    }
+  } catch(e) { console.error('Firebase load error', e); }
+  return null;
+};
+
+// Real-time listener — updates UI if another device saves
+onSnapshot(DOC, (snap) => {
+  if (!snap.exists()) return;
+  try {
+    const remote = JSON.parse(snap.data().payload);
+    // Only update if different from current (avoid echo)
+    if (JSON.stringify(remote) !== JSON.stringify(window._currentData)) {
+      window._currentData = remote;
+      if (window._onRemoteUpdate) window._onRemoteUpdate(remote);
+    }
+  } catch(e) {}
+});
+
+// Signal that Firebase is ready
+window._fbReady = true;
+document.dispatchEvent(new Event('fb-ready'));
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 /* Force English numerals everywhere */
@@ -162,6 +215,21 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .prog-fill{height:100%;background:var(--red);border-radius:2px;transition:width .3s}
 .prog-text{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--t3)}
 
+/* SYNC INDICATOR */
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--border2);display:inline-block;transition:background .3s}
+.sync-dot.syncing{background:var(--gold);animation:pulse .8s infinite}
+.sync-dot.saved{background:var(--green)}
+.sync-dot.error{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.sync-label{font-size:10px;color:var(--t3);letter-spacing:.05em}
+/* LOADING SCREEN */
+#loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:12px}
+.loading-logo{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:.1em;color:var(--t1)}
+.loading-logo span{color:var(--red)}
+.loading-spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:12px;color:var(--t3);letter-spacing:.08em}
+
 /* TOAST */
 .toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 18px;font-size:13px;color:var(--t1);z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1}
@@ -247,13 +315,26 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 </head>
 <body>
 
+<!-- LOADING SCREEN -->
+<div id="loading-screen">
+  <div class="loading-logo">GYM <span>TRACKER</span></div>
+  <div class="loading-spinner"></div>
+  <div class="loading-text">CONNECTING TO CLOUD...</div>
+</div>
+
 <nav>
   <div class="nav-logo">GYM <span>TRACKER</span></div>
-  <div class="nav-tabs">
-    <button class="nav-tab active" onclick="showPage('log')">📋 Log</button>
-    <button class="nav-tab" onclick="showPage('stats')">📊 Stats</button>
-    <button class="nav-tab" onclick="showPage('prs')">🏆 PRs</button>
-    <button class="nav-tab" onclick="showPage('macros')">🥗 Macros</button>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:5px" title="Cloud sync status">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span class="sync-label" id="sync-label">—</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showPage('log')">📋 Log</button>
+      <button class="nav-tab" onclick="showPage('stats')">📊 Stats</button>
+      <button class="nav-tab" onclick="showPage('prs')">🏆 PRs</button>
+      <button class="nav-tab" onclick="showPage('macros')">🥗 Macros</button>
+    </div>
   </div>
 </nav>
 
@@ -555,10 +636,78 @@ if (data.restDuration !== undefined) { delete data.restDuration; localStorage.re
 let curWeek = 0;
 let curDay = 0;
 let restIv = null, restSecs = 0, restTotal = 0;
+let _saveTimer = null;
+let data = null; // loaded async from Firebase
+
+function setSyncStatus(status) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  if (!dot) return;
+  dot.className = 'sync-dot ' + status;
+  lbl.textContent = status === 'syncing' ? 'Saving...' : status === 'saved' ? 'Synced ✓' : status === 'error' ? 'Offline' : '—';
+}
 
 function save() {
+  // Always save to localStorage as backup
   localStorage.setItem('gymData', JSON.stringify(data));
+  window._currentData = data;
+  // Debounce Firebase save (wait 800ms after last change)
+  setSyncStatus('syncing');
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    if (window._fbSave) window._fbSave(data);
+    else setSyncStatus('error');
+  }, 800);
 }
+
+// Called when Firebase detects a change from another device
+window._onRemoteUpdate = (remote) => {
+  data = remote;
+  window._currentData = remote;
+  localStorage.setItem('gymData', JSON.stringify(data));
+  renderLog();
+  setSyncStatus('saved');
+  toast('📡 Synced from another device');
+};
+
+// ─── INIT — wait for Firebase then load ───────────────────────────────────────
+async function initApp() {
+  // Try Firebase first
+  let loaded = null;
+  if (window._fbReady && window._fbLoad) {
+    loaded = await window._fbLoad();
+  }
+  // Fallback to localStorage
+  if (!loaded) {
+    const local = localStorage.getItem('gymData');
+    loaded = local ? JSON.parse(local) : null;
+  }
+  // Migrate old data with restDuration
+  if (loaded && loaded.restDuration !== undefined) {
+    delete loaded.restDuration; loaded = null;
+  }
+  data = loaded || initData;
+  window._currentData = data;
+  // Hide loading screen
+  const ls = document.getElementById('loading-screen');
+  if (ls) ls.style.display = 'none';
+  setSyncStatus('saved');
+  renderLog();
+}
+
+document.addEventListener('fb-ready', initApp);
+// Fallback: if Firebase takes too long (>4s), start with local data
+setTimeout(() => {
+  if (document.getElementById('loading-screen')?.style.display !== 'none') {
+    console.warn('Firebase timeout — using local data');
+    const local = localStorage.getItem('gymData');
+    data = (local ? JSON.parse(local) : null) || initData;
+    window._currentData = data;
+    document.getElementById('loading-screen').style.display = 'none';
+    setSyncStatus('error');
+    renderLog();
+  }
+}, 4000);
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
 function showPage(id) {
@@ -1147,9 +1296,6 @@ function toast(msg) {
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2200);
 }
-
-// ─── INIT ─────────────────────────────────────────────────────────────────────
-renderLog();
 </script>
 </body>
 </html>
