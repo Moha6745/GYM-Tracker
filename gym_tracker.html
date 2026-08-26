@@ -612,9 +612,6 @@ const initData = {
 };
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
-let data = JSON.parse(localStorage.getItem('gymData') || 'null') || initData;
-// migrate old data that has restDuration field
-if (data.restDuration !== undefined) { delete data.restDuration; localStorage.removeItem('gymData'); data = initData; }
 let curWeek = 0;
 let curDay = 0;
 let restIv = null, restSecs = 0, restTotal = 0;
