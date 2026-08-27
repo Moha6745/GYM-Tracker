@@ -253,6 +253,11 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .macro-bar-track{flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden}
 .macro-bar-fill{height:100%;border-radius:4px;transition:width .5s cubic-bezier(.4,0,.2,1)}
 .macro-bar-val{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--t2);width:48px;text-align:right;flex-shrink:0}
+.meal-items-list{margin:6px 0 8px;display:flex;flex-direction:column;gap:3px}
+.meal-item{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12px;padding:3px 0;border-bottom:1px dashed var(--border)}
+.meal-item:last-child{border-bottom:none}
+.meal-item-name{color:var(--t2);flex:1}
+.meal-item-qty{color:var(--gold);font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;white-space:nowrap;flex-shrink:0}
 /* MEAL CARDS */
 .meal-block{border:1px solid var(--border);border-radius:var(--r);margin-bottom:8px;overflow:hidden}
 .meal-header{background:var(--bg3);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
@@ -1239,129 +1244,236 @@ function renderPRs() {
 // ─── MACROS CALCULATOR ────────────────────────────────────────────────────────
 const MEALS = {
   breakfast: {
-    icon: '🌅', label: 'Breakfast',
-    main:  { food:'Oatmeal + Whey Protein + Banana',        p:35, c:65, f:8,  kcal:470 },
-    alt:   { food:'Egg White Omelette (4 eggs) + Whole Wheat Toast + Avocado', p:32, c:40, f:14, kcal:410 }
+    icon: '🌅', label: 'الإفطار',
+    main: {
+      title: 'شوفان مع بروتين وموز',
+      items: [
+        { name:'شوفان مطبوخ', qty:'80 غرام' },
+        { name:'سكوب بروتين واي', qty:'30 غرام (1 سكوب)' },
+        { name:'موزة متوسطة', qty:'1 حبة (~120 غرام)' },
+        { name:'ملعقة زبدة فول سوداني طبيعية', qty:'15 غرام' },
+      ],
+      p:35, c:65, f:8, kcal:470
+    },
+    alt: {
+      title: 'بيض مع توست نخالة وأفوكادو',
+      items: [
+        { name:'بيض كامل', qty:'3 بيضات' },
+        { name:'بياض بيض إضافي', qty:'3 بياضات' },
+        { name:'توست نخالة أو حبوب كاملة', qty:'شريحتان (~60 غرام)' },
+        { name:'أفوكادو', qty:'نصف حبة (~60 غرام)' },
+      ],
+      p:32, c:40, f:14, kcal:410
+    }
   },
   snack1: {
-    icon: '🍎', label: 'Morning Snack',
-    main:  { food:'Greek Yogurt (200g) + Mixed Berries',   p:18, c:22, f:2,  kcal:178 },
-    alt:   { food:'Cottage Cheese (150g) + Apple + Walnuts (15g)', p:16, c:20, f:8,  kcal:212 }
+    icon: '🍎', label: 'سناك الصباح',
+    main: {
+      title: 'زبادي يوناني مع فواكه',
+      items: [
+        { name:'زبادي يوناني قليل الدسم', qty:'200 غرام' },
+        { name:'فراولة أو توت مشكل', qty:'100 غرام' },
+        { name:'عسل طبيعي', qty:'ملعقة صغيرة (~10 غرام)' },
+      ],
+      p:18, c:22, f:2, kcal:178
+    },
+    alt: {
+      title: 'جبنة قريش مع تفاح وجوز',
+      items: [
+        { name:'جبنة قريش (كوتاج تشيز)', qty:'150 غرام' },
+        { name:'تفاحة متوسطة', qty:'1 حبة (~150 غرام)' },
+        { name:'جوز', qty:'15 غرام (7-8 حبات)' },
+      ],
+      p:16, c:20, f:8, kcal:212
+    }
   },
   lunch: {
-    icon: '☀️', label: 'Lunch',
-    main:  { food:'Grilled Chicken Breast (200g) + Brown Rice (150g) + Broccoli', p:48, c:60, f:7,  kcal:495 },
-    alt:   { food:'Tuna Salad + Quinoa (150g) + Olive Oil Dressing', p:42, c:55, f:12, kcal:500 }
+    icon: '☀️', label: 'الغداء',
+    main: {
+      title: 'صدر دجاج مشوي مع أرز بني وبروكلي',
+      items: [
+        { name:'صدر دجاج مشوي', qty:'200 غرام (صدر كامل)' },
+        { name:'أرز بني مطبوخ', qty:'150 غرام' },
+        { name:'بروكلي مطهو على البخار', qty:'150 غرام' },
+        { name:'زيت زيتون للتتبيل', qty:'ملعقة صغيرة (5 غرام)' },
+      ],
+      p:48, c:60, f:7, kcal:495
+    },
+    alt: {
+      title: 'تونة مع كينوا وخضار',
+      items: [
+        { name:'تونة بالماء (معلبة مصفاة)', qty:'185 غرام (علبة كاملة)' },
+        { name:'كينوا مطبوخة', qty:'150 غرام' },
+        { name:'خيار وطماطم وبصل', qty:'100 غرام مجموع' },
+        { name:'زيت زيتون بكر', qty:'ملعقة كبيرة (10 غرام)' },
+        { name:'عصير ليمون', qty:'نصف حبة' },
+      ],
+      p:42, c:55, f:12, kcal:500
+    }
   },
   snack2: {
-    icon: '💪', label: 'Pre-Workout Snack',
-    main:  { food:'Banana + Peanut Butter (1 tbsp) + Whey Shake', p:28, c:38, f:9,  kcal:345 },
-    alt:   { food:'Dates (3) + Almonds (20g) + Low-fat Milk (250ml)', p:14, c:40, f:10, kcal:306 }
+    icon: '💪', label: 'سناك ما قبل التمرين',
+    main: {
+      title: 'موز مع زبدة فول سوداني وشيك بروتين',
+      items: [
+        { name:'موزة كبيرة', qty:'1 حبة (~140 غرام)' },
+        { name:'زبدة فول سوداني طبيعية', qty:'ملعقة كبيرة (15 غرام)' },
+        { name:'سكوب بروتين واي مع ماء أو حليب', qty:'30 غرام (1 سكوب)' },
+      ],
+      p:28, c:38, f:9, kcal:345
+    },
+    alt: {
+      title: 'تمر مع لوز وحليب قليل الدسم',
+      items: [
+        { name:'تمر مجدول أو سكري', qty:'3 حبات (~60 غرام)' },
+        { name:'لوز خام', qty:'20 غرام (~15 حبة)' },
+        { name:'حليب قليل الدسم', qty:'250 مل (كوب كامل)' },
+      ],
+      p:14, c:40, f:10, kcal:306
+    }
   },
   dinner: {
-    icon: '🌙', label: 'Dinner',
-    main:  { food:'Salmon (200g) + Sweet Potato + Salad', p:42, c:45, f:16, kcal:492 },
-    alt:   { food:'Lean Beef (180g) + White Rice + Steamed Vegetables', p:44, c:58, f:11, kcal:511 }
+    icon: '🌙', label: 'العشاء',
+    main: {
+      title: 'سلمون مشوي مع بطاطا حلوة وسلطة',
+      items: [
+        { name:'فيليه سلمون مشوي', qty:'200 غرام' },
+        { name:'بطاطا حلوة مسلوقة أو مشوية', qty:'200 غرام (حبة متوسطة)' },
+        { name:'خس وطماطم وخيار', qty:'100 غرام' },
+        { name:'زيت زيتون بكر', qty:'ملعقة كبيرة (10 غرام)' },
+      ],
+      p:42, c:45, f:16, kcal:492
+    },
+    alt: {
+      title: 'لحم بقري قليل الدهن مع أرز وخضار مطهوة',
+      items: [
+        { name:'لحم بقري مفروم قليل الدهن (90/10)', qty:'180 غرام' },
+        { name:'أرز أبيض مطبوخ', qty:'130 غرام' },
+        { name:'خضار مشكلة مطهوة على البخار', qty:'150 غرام' },
+        { name:'زيت زيتون للطهي', qty:'ملعقة صغيرة (5 غرام)' },
+      ],
+      p:44, c:58, f:11, kcal:511
+    }
   },
   snack3: {
-    icon: '🌜', label: 'Evening Snack',
-    main:  { food:'Casein Protein Shake + Low-fat Milk (200ml)', p:30, c:15, f:3,  kcal:207 },
-    alt:   { food:'Boiled Eggs (2) + Cucumber + Hummus (30g)', p:18, c:10, f:12, kcal:218 }
+    icon: '🌜', label: 'سناك ما قبل النوم',
+    main: {
+      title: 'شيك كازيين مع حليب',
+      items: [
+        { name:'سكوب بروتين كازيين', qty:'30 غرام (1 سكوب)' },
+        { name:'حليب قليل الدسم', qty:'200 مل' },
+        { name:'ملعقة زبدة فول سوداني', qty:'10 غرام (اختياري)' },
+      ],
+      p:30, c:15, f:3, kcal:207
+    },
+    alt: {
+      title: 'بيض مسلوق مع خيار وحمص',
+      items: [
+        { name:'بيض مسلوق', qty:'2 بيضة كاملة' },
+        { name:'خيار طازج مقطع', qty:'150 غرام' },
+        { name:'حمص (معلب مصفى)', qty:'30 غرام (2 ملعقة كبيرة)' },
+      ],
+      p:18, c:10, f:12, kcal:218
+    }
   }
 };
 
 function calcMacros() {
-  const w  = parseFloat(document.getElementById('m-weight').value);
-  const h  = parseFloat(document.getElementById('m-height').value);
-  const a  = parseFloat(document.getElementById('m-age').value);
-  const g  = document.getElementById('m-gender').value;
-  const act= parseFloat(document.getElementById('m-activity').value);
-  const goal = document.getElementById('m-goal').value;
+  const w   = parseFloat(document.getElementById('m-weight').value);
+  const h   = parseFloat(document.getElementById('m-height').value);
+  const a   = parseFloat(document.getElementById('m-age').value);
+  const g   = document.getElementById('m-gender').value;
+  const act = parseFloat(document.getElementById('m-activity').value);
+  const goal= document.getElementById('m-goal').value;
 
-  if (!w || !h || !a) { toast('Please fill all fields'); return; }
+  if (!w || !h || !a) { toast('الرجاء تعبئة جميع الحقول'); return; }
 
-  // Mifflin-St Jeor BMR
-  const bmr = g === 'male'
-    ? 10*w + 6.25*h - 5*a + 5
-    : 10*w + 6.25*h - 5*a - 161;
-
+  const bmr  = g === 'male' ? 10*w + 6.25*h - 5*a + 5 : 10*w + 6.25*h - 5*a - 161;
   const tdee = Math.round(bmr * act);
-  const kcal = goal === 'cut' ? Math.round(tdee * 0.82)
-             : goal === 'bulk'? Math.round(tdee * 1.12)
-             : tdee;
+  const kcal = goal === 'cut' ? Math.round(tdee * 0.82) : goal === 'bulk' ? Math.round(tdee * 1.12) : tdee;
 
-  // Macro split: protein 2g/kg, fat 25%, rest carbs
   const protein = Math.round(w * 2);
   const fat     = Math.round(kcal * 0.25 / 9);
   const carbs   = Math.round((kcal - protein*4 - fat*9) / 4);
 
-  // Render numbers
   const goalColors = { cut:'var(--red)', maintain:'var(--blue)', bulk:'var(--green)' };
   const gc = goalColors[goal];
+
   document.getElementById('macro-nums').innerHTML = `
     <div class="macro-num-card">
       <div class="macro-num-val" style="color:${gc}">${kcal}</div>
-      <div class="macro-num-lbl">CALORIES</div>
-      <div class="macro-num-sub">kcal/day</div>
+      <div class="macro-num-lbl">سعرات</div>
+      <div class="macro-num-sub">kcal/يوم</div>
     </div>
     <div class="macro-num-card">
       <div class="macro-num-val" style="color:#e87040">${protein}g</div>
-      <div class="macro-num-lbl">PROTEIN</div>
+      <div class="macro-num-lbl">بروتين</div>
       <div class="macro-num-sub">${Math.round(protein*4)} kcal</div>
     </div>
     <div class="macro-num-card">
       <div class="macro-num-val" style="color:var(--gold)">${carbs}g</div>
-      <div class="macro-num-lbl">CARBS</div>
+      <div class="macro-num-lbl">كربوهيدرات</div>
       <div class="macro-num-sub">${Math.round(carbs*4)} kcal</div>
     </div>
     <div class="macro-num-card">
       <div class="macro-num-val" style="color:var(--blue)">${fat}g</div>
-      <div class="macro-num-lbl">FAT</div>
+      <div class="macro-num-lbl">دهون</div>
       <div class="macro-num-sub">${Math.round(fat*9)} kcal</div>
     </div>`;
 
-  // Render bars
   const pPct = Math.round(protein*4/kcal*100);
   const cPct = Math.round(carbs*4/kcal*100);
   const fPct = Math.round(fat*9/kcal*100);
   document.getElementById('macro-bars').innerHTML = `
-    <div class="macro-bar-row"><div class="macro-bar-lbl">Protein</div><div class="macro-bar-track"><div class="macro-bar-fill" style="width:${pPct}%;background:#e87040"></div></div><div class="macro-bar-val">${pPct}%</div></div>
-    <div class="macro-bar-row"><div class="macro-bar-lbl">Carbs</div><div class="macro-bar-track"><div class="macro-bar-fill" style="width:${cPct}%;background:var(--gold)"></div></div><div class="macro-bar-val">${cPct}%</div></div>
-    <div class="macro-bar-row"><div class="macro-bar-lbl">Fat</div><div class="macro-bar-track"><div class="macro-bar-fill" style="width:${fPct}%;background:var(--blue)"></div></div><div class="macro-bar-val">${fPct}%</div></div>`;
+    <div class="macro-bar-row"><div class="macro-bar-lbl">بروتين</div><div class="macro-bar-track"><div class="macro-bar-fill" style="width:${pPct}%;background:#e87040"></div></div><div class="macro-bar-val">${pPct}%</div></div>
+    <div class="macro-bar-row"><div class="macro-bar-lbl">كربوهيدرات</div><div class="macro-bar-track"><div class="macro-bar-fill" style="width:${cPct}%;background:var(--gold)"></div></div><div class="macro-bar-val">${cPct}%</div></div>
+    <div class="macro-bar-row"><div class="macro-bar-lbl">دهون</div><div class="macro-bar-track"><div class="macro-bar-fill" style="width:${fPct}%;background:var(--blue)"></div></div><div class="macro-bar-val">${fPct}%</div></div>`;
 
-  // Scale meal plan to hit targets (simple proportional scale)
   const totalBase = Object.values(MEALS).reduce((s,m) => s + m.main.kcal, 0);
   const scale = kcal / totalBase;
 
   let mealHtml = '';
   Object.values(MEALS).forEach(meal => {
-    const ms = meal.main, as_ = meal.alt;
+    const ms = meal.main, alt = meal.alt;
     const sKcal = Math.round(ms.kcal * scale);
     const sP = Math.round(ms.p * scale), sC = Math.round(ms.c * scale), sF = Math.round(ms.f * scale);
-    const aKcal = Math.round(as_.kcal * scale);
-    const aP = Math.round(as_.p * scale), aC = Math.round(as_.c * scale), aF = Math.round(as_.f * scale);
+    const aKcal = Math.round(alt.kcal * scale);
+    const aP = Math.round(alt.p * scale), aC = Math.round(alt.c * scale), aF = Math.round(alt.f * scale);
+
+    const renderItems = (items, sc) => items.map(it => {
+      // Scale quantity if it has grams/ml
+      let qty = it.qty;
+      const match = qty.match(/^(\d+)/);
+      if (match && (qty.includes('غرام') || qty.includes('مل'))) {
+        qty = qty.replace(/^\d+/, Math.round(parseInt(match[1]) * sc));
+      }
+      return `<div class="meal-item"><span class="meal-item-name">${it.name}</span><span class="meal-item-qty">${qty}</span></div>`;
+    }).join('');
+
     mealHtml += `
       <div class="meal-block">
-        <div class="meal-header" onclick="this.parentElement.querySelector('.meal-body').style.display=this.parentElement.querySelector('.meal-body').style.display==='none'?'block':'none'">
+        <div class="meal-header" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
           <div class="meal-title">${meal.icon} ${meal.label}</div>
-          <div class="meal-kcal">~${sKcal} kcal ▾</div>
+          <div class="meal-kcal">~${sKcal} سعرة ▾</div>
         </div>
         <div class="meal-body">
           <div class="meal-option">
-            <div class="meal-option-label main">OPTION A — Main</div>
-            <div class="meal-food">${ms.food}</div>
-            <div class="meal-macros">${sP}g protein · ${sC}g carbs · ${sF}g fat · ${sKcal} kcal</div>
+            <div class="meal-option-label main">الخيار الأول</div>
+            <div class="meal-food">${ms.title}</div>
+            <div class="meal-items-list">${renderItems(ms.items, scale)}</div>
+            <div class="meal-macros">${sP}g بروتين · ${sC}g كارب · ${sF}g دهون · ${sKcal} سعرة</div>
           </div>
           <div class="meal-option">
-            <div class="meal-option-label alt">OPTION B — Alternative</div>
-            <div class="meal-food">${as_.food}</div>
-            <div class="meal-macros">${aP}g protein · ${aC}g carbs · ${aF}g fat · ${aKcal} kcal</div>
+            <div class="meal-option-label alt">الخيار البديل</div>
+            <div class="meal-food">${alt.title}</div>
+            <div class="meal-items-list">${renderItems(alt.items, scale)}</div>
+            <div class="meal-macros">${aP}g بروتين · ${aC}g كارب · ${aF}g دهون · ${aKcal} سعرة</div>
           </div>
         </div>
       </div>`;
   });
-  document.getElementById('meal-plan').innerHTML = mealHtml;
 
+  document.getElementById('meal-plan').innerHTML = mealHtml;
   document.getElementById('macro-input-card').style.display = 'none';
   document.getElementById('macro-results').style.display = 'block';
 }
