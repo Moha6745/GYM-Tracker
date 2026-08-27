@@ -62,10 +62,14 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:va
 .bebas{font-family:'Bebas Neue',sans-serif;letter-spacing:.05em}
 
 /* NAV */
-nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:.75rem 1.25rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-.nav-logo{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.1em;color:var(--t1)}
+nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:.75rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;row-gap:8px;position:sticky;top:0;z-index:100}
+.nav-logo{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.1em;color:var(--t1);flex-shrink:0}
 .nav-logo span{color:var(--red)}
-.nav-tabs{display:flex;gap:4px}
+.nav-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.nav-status{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.nav-user-badge{font-size:12px;color:var(--t2);cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:10px;display:none;flex-shrink:0;white-space:nowrap}
+.nav-tabs{display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.nav-tabs::-webkit-scrollbar{display:none}
 .nav-tab{padding:6px 14px;border-radius:20px;border:1px solid transparent;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;color:var(--t2);background:transparent}
 .nav-tab:hover{color:var(--t1);border-color:var(--border)}
 .nav-tab.active{background:var(--red);color:#fff;border-color:var(--red)}
@@ -334,6 +338,14 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
   .sg-input{font-size:12px}
   .stats-grid{grid-template-columns:1fr 1fr}
   .pr-grid{grid-template-columns:1fr 1fr}
+  nav{padding:.6rem .85rem}
+  .nav-right{width:100%}
+  .nav-tabs{width:100%}
+  .sync-label{display:none}
+  .nav-tab{padding:6px 10px;font-size:11px}
+  .ex-header-card{flex-direction:column;align-items:stretch}
+  .ex-header-left{width:100%}
+  .ex-actions{width:100%;flex-wrap:wrap}
 }
 </style>
 </head>
@@ -364,12 +376,12 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 
 <nav>
   <div class="nav-logo">GYM <span>TRACKER</span></div>
-  <div style="display:flex;align-items:center;gap:10px">
-    <div style="display:flex;align-items:center;gap:5px" title="Cloud sync status">
+  <div class="nav-right">
+    <div class="nav-status" title="Cloud sync status">
       <div class="sync-dot" id="sync-dot"></div>
       <span class="sync-label" id="sync-label">—</span>
     </div>
-    <span id="nav-username" style="font-size:12px;color:var(--t2);cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:10px;display:none" onclick="switchUser()" title="تبديل المستخدم">👤 <span id="nav-username-text"></span></span>
+    <span id="nav-username" class="nav-user-badge" onclick="switchUser()" title="تبديل المستخدم">👤 <span id="nav-username-text"></span></span>
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="showPage('log')">📋 Log</button>
       <button class="nav-tab" onclick="showPage('stats')">📊 Stats</button>
