@@ -367,7 +367,6 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
     <div style="font-size:12px;color:var(--t3);margin-bottom:1rem" id="rest-next-label">–</div>
     <button class="btn btn-red" style="width:100%;justify-content:center" onclick="skipRest()">Skip →</button>
     <div style="display:flex;gap:8px;margin-top:8px;justify-content:center">
-      <button class="btn btn-sm" onclick="adjustRest(-30)">-30s</button>
       <button class="btn btn-sm" onclick="adjustRest(30)">+30s</button>
     </div>
   </div>
@@ -492,10 +491,7 @@ const LARGE_MUSCLES = ['chest','back','quads','hamstrings','glutes','legs','lowe
 const SMALL_MUSCLES = ['biceps','triceps','shoulders','calves','core','adductors','abs','arms'];
 function getRestDuration(muscleName) {
   const m = (muscleName || '').toLowerCase();
-  // large = 60-90s, small = 30-60s
-  for (const lg of LARGE_MUSCLES) { if (m.includes(lg)) return 90; }
-  for (const sm of SMALL_MUSCLES) { if (m.includes(sm)) return 60; }
-  return 75; // default middle
+  return 60; // 60s for all exercises
 }
 
 // ─── AUDIO & BACKGROUND TIMER ────────────────────────────────────────────────
@@ -1064,76 +1060,77 @@ function sendNotification(title, body) {
 // ─── REST TIMER ──────────────────────────────────────────────────────────────
 function startRest(nextName, muscleName) {
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-  const dur = getRestDuration(muscleName || '');
-  restSecs = dur; restTotal = dur;
+  const dur = 60; // always 60s base
+  restTotal = dur;
 
-  // Save end timestamp to localStorage — survives backgrounding on iOS
+  // Save end timestamp — survives tab switch on iOS
   const endTime = Date.now() + dur * 1000;
-  localStorage.setItem('restEndTime', endTime);
+  localStorage.setItem('restEndTime', String(endTime));
   localStorage.setItem('restNextName', nextName);
 
-  const updateUI = (s) => {
-    const secs = Math.max(0, s);
-    const el  = document.getElementById('rest-num');
-    const bar = document.getElementById('rest-bar-fill');
-    if (el)  el.textContent = secs;
-    if (bar) bar.style.width = Math.round(secs / restTotal * 100) + '%';
-  };
+  _launchRestTimer(endTime, nextName);
+}
 
-  updateUI(restSecs);
-  document.getElementById('rest-next-label').textContent  = 'Next: ' + nextName;
-  document.getElementById('rest-type-label').textContent  = dur === 90 ? '🏋️ Large Muscle — 90s' : '💪 Small Muscle — 60s';
-  document.getElementById('rest-overlay').style.display   = 'flex';
-
-  // Stop any previous timers
+function _launchRestTimer(endTime, nextName) {
+  // Stop previous timers
   if (restWorker) restWorker.postMessage({ cmd: 'stop' });
   clearInterval(restIv);
 
+  document.getElementById('rest-next-label').textContent = 'Next: ' + nextName;
+  document.getElementById('rest-type-label').textContent = '⏱ Rest — 60s';
+  document.getElementById('rest-overlay').style.display  = 'flex';
+
   const tick = () => {
     const remaining = Math.round((endTime - Date.now()) / 1000);
-    restSecs = remaining;
-    updateUI(remaining);
+    restSecs = Math.max(0, remaining);
+    const el  = document.getElementById('rest-num');
+    const bar = document.getElementById('rest-bar-fill');
+    if (el)  el.textContent = restSecs;
+    if (bar) bar.style.width = Math.round(restSecs / restTotal * 100) + '%';
+
     if (remaining <= 0) {
       if (restWorker) restWorker.postMessage({ cmd: 'stop' });
       clearInterval(restIv);
       localStorage.removeItem('restEndTime');
-      document.getElementById('rest-overlay').style.display = 'none';
+      localStorage.removeItem('restNextName');
+      const overlay = document.getElementById('rest-overlay');
+      if (overlay) overlay.style.display = 'none';
       playBeep();
       sendNotification('✅ Rest Done!', `Time to start: ${nextName}`);
     }
   };
 
-  // Use Web Worker if available for background accuracy
+  tick(); // immediate update
+  restIv = setInterval(tick, 500); // poll every 500ms — catches iOS resume too
+
+  // Web Worker also fires tick for background accuracy on Android/Desktop
   if (restWorker) {
-    restWorker.onmessage = (e) => {
-      if (e.data.type === 'tick' || e.data.type === 'done') tick();
-    };
-    restWorker.postMessage({ cmd: 'start', secs: dur });
+    restWorker.onmessage = () => tick();
+    restWorker.postMessage({ cmd: 'start', secs: Math.round((endTime - Date.now()) / 1000) });
   }
-  // Always run setInterval too — covers iOS where Worker gets suspended
-  restIv = setInterval(tick, 500);
 }
 
-// When page becomes visible again — recalculate from saved timestamp
+// When tab becomes visible — re-sync from stored timestamp
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   const endTime = localStorage.getItem('restEndTime');
   if (!endTime) return;
-  const remaining = Math.round((parseInt(endTime) - Date.now()) / 1000);
   const nextName  = localStorage.getItem('restNextName') || '—';
+  const remaining = Math.round((parseInt(endTime) - Date.now()) / 1000);
+
   if (remaining <= 0) {
-    // Rest finished while away
     localStorage.removeItem('restEndTime');
     localStorage.removeItem('restNextName');
-    document.getElementById('rest-overlay').style.display = 'none';
+    clearInterval(restIv);
+    const overlay = document.getElementById('rest-overlay');
+    if (overlay) overlay.style.display = 'none';
     playBeep();
     sendNotification('✅ Rest Done!', `Time to start: ${nextName}`);
     toast('⏱ Rest finished while you were away!');
   } else {
-    // Resume with correct remaining time
-    restSecs = remaining;
-    document.getElementById('rest-num').textContent = remaining;
-    document.getElementById('rest-overlay').style.display = 'flex';
+    // Resume timer from correct remaining time
+    restTotal = Math.max(restTotal, remaining);
+    _launchRestTimer(parseInt(endTime), nextName);
   }
 });
 
@@ -1146,13 +1143,11 @@ function skipRest() {
 }
 
 function adjustRest(d) {
-  restSecs = Math.max(10, restSecs + d);
-  restTotal = Math.max(restTotal, restSecs);
-  // Update saved end time
-  localStorage.setItem('restEndTime', Date.now() + restSecs * 1000);
-  document.getElementById('rest-num').textContent = restSecs;
-  document.getElementById('rest-bar-fill').style.width = Math.round(restSecs / restTotal * 100) + '%';
-  if (restWorker) restWorker.postMessage({ cmd: 'start', secs: restSecs });
+  // Only allow +30s (d=30), keep - for skipping
+  const newEnd = (parseInt(localStorage.getItem('restEndTime')) || Date.now()) + d * 1000;
+  localStorage.setItem('restEndTime', String(newEnd));
+  restTotal += d;
+  _launchRestTimer(newEnd, localStorage.getItem('restNextName') || '—');
 }
 
 // ─── STATS ───────────────────────────────────────────────────────────────────
@@ -1184,7 +1179,7 @@ function renderStats() {
     <div class="stat-card"><div class="stat-val">${totalSets}</div><div class="stat-lbl">TOTAL SETS</div></div>
     <div class="stat-card"><div class="stat-val">${totalReps.toLocaleString()}</div><div class="stat-lbl">TOTAL REPS</div></div>
     <div class="stat-card"><div class="stat-val">${(totalVol/1000).toFixed(1)}t</div><div class="stat-lbl">TOTAL VOLUME</div></div>
-    <div class="stat-card"><div class="stat-val" style="font-size:18px;padding-top:6px">60–90s</div><div class="stat-lbl">REST (auto by muscle)</div></div>
+    <div class="stat-card"><div class="stat-val" style="font-size:18px;padding-top:6px">60s</div><div class="stat-lbl">REST BETWEEN SETS</div></div>
   `;
 
   const sorted = Object.entries(volByEx).sort((a, b) => b[1] - a[1]).slice(0, 12);
