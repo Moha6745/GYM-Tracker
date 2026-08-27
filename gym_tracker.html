@@ -153,6 +153,8 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .btn-red:hover{background:var(--red2);border-color:var(--red2);color:#fff}
 .btn-green{background:var(--green-s);border-color:var(--green);color:var(--green)}
 .btn-green:hover{background:var(--green);color:#000}
+.btn-rir{color:var(--t3)}
+.btn-rir.active{background:var(--blue-s);border-color:var(--blue);color:var(--blue)}
 .btn-ghost-red{color:var(--red);border-color:transparent}
 .btn-ghost-red:hover{background:var(--red-s);border-color:var(--red)}
 .btn-ghost-red:hover{color:var(--red)}
@@ -856,7 +858,7 @@ function renderDay() {
     if (allDone) {
       // ── COLLAPSED / ACCORDION MODE when fully done ──
       // Build a compact summary: best weight × reps per set
-      const summary = ex.sets.map(s => `${s.w ?? '—'}kg×${s.r ?? '—'}`).join('  ·  ');
+      const summary = ex.sets.map(s => `${s.w ?? '—'}kg×${s.r ?? '—'}${ex.showRir && s.rir != null ? ` (RIR ${s.rir})` : ''}`).join('  ·  ');
       html += `<div class="ex-table-wrap">
         <details class="ex-accordion">
           <summary class="ex-accordion-summary ex-locked">
@@ -883,6 +885,10 @@ function renderDay() {
               <div class="sg-cell sg-label">Reps</div>
               ${ex.sets.map(s => `<div class="sg-cell done-cell"><input class="sg-input" type="number" value="${s.r ?? ''}" readonly style="opacity:.7"/></div>`).join('')}
               <div class="sg-cell"></div>
+              ${ex.showRir ? `
+              <div class="sg-cell sg-label">RIR</div>
+              ${ex.sets.map(s => `<div class="sg-cell done-cell"><input class="sg-input" type="number" value="${s.rir ?? ''}" readonly style="opacity:.7"/></div>`).join('')}
+              <div class="sg-cell"></div>` : ''}
               <div class="sg-cell sg-label">Done</div>
               ${ex.sets.map(() => `<div class="sg-cell" style="justify-content:center"><div class="sg-check checked"></div></div>`).join('')}
               <div class="sg-cell"></div>
@@ -912,6 +918,7 @@ function renderDay() {
             <button class="btn btn-xs btn-danger" onclick="deleteExercise(${ei})" title="Remove">✕</button>
             <button class="btn btn-xs" onclick="moveEx(${ei},-1)" title="Move up">↑</button>
             <button class="btn btn-xs" onclick="moveEx(${ei},1)" title="Move down">↓</button>
+            <button class="btn btn-xs btn-rir ${ex.showRir ? 'active' : ''}" onclick="toggleRir(${ei})" title="RIR — Reps in Reserve">🎯 RIR</button>
             <button class="btn btn-xs btn-green" onclick="addSet(${ei})">+ Set</button>
           </div>
         </div>
@@ -933,6 +940,14 @@ function renderDay() {
                 onchange="updateSet(${ei},${si},'r',this.value)" min="0"/>
             </div>`).join('')}
           <div class="sg-cell"></div>
+          ${ex.showRir ? `
+          <div class="sg-cell sg-label">RIR</div>
+          ${ex.sets.map((s, si) => `
+            <div class="sg-cell ${s.done ? 'done-cell' : ''}">
+              <input class="sg-input" type="number" placeholder="—" value="${s.rir ?? ''}"
+                onchange="updateSet(${ei},${si},'rir',this.value)" min="0" max="10"/>
+            </div>`).join('')}
+          <div class="sg-cell"></div>` : ''}
           <div class="sg-cell sg-label">Done</div>
           ${ex.sets.map((s, si) => `
             <div class="sg-cell" style="justify-content:center">
@@ -999,7 +1014,13 @@ function updateProgress() {
 }
 
 function addSet(ei) {
-  data.weeks[curWeek].days[curDay].exercises[ei].sets.push({ w: null, r: null, done: false });
+  data.weeks[curWeek].days[curDay].exercises[ei].sets.push({ w: null, r: null, rir: null, done: false });
+  save(); renderDay();
+}
+
+function toggleRir(ei) {
+  const ex = data.weeks[curWeek].days[curDay].exercises[ei];
+  ex.showRir = !ex.showRir;
   save(); renderDay();
 }
 
@@ -1069,7 +1090,7 @@ function addWeek() {
       time: '',
       exercises: d.exercises.map(ex => ({
         ...ex,
-        sets: ex.sets.map(s => ({ w: null, r: null, done: false }))
+        sets: ex.sets.map(s => ({ w: null, r: null, rir: null, done: false }))
       }))
     }));
   } else {
@@ -1090,7 +1111,7 @@ function addExercise() {
   const muscle = document.getElementById('new-ex-muscle').value.trim() || 'General';
   const numSets = parseInt(document.getElementById('new-ex-sets').value) || 3;
   if (!name) return;
-  const sets = Array.from({ length: Math.min(numSets, 8) }, () => ({ w: null, r: null, done: false }));
+  const sets = Array.from({ length: Math.min(numSets, 8) }, () => ({ w: null, r: null, rir: null, done: false }));
   data.weeks[curWeek].days[curDay].exercises.push({ name, muscle, sets });
   save(); closeModal('modal-ex'); renderDay(); toast(`${name} added`);
   document.getElementById('new-ex-name').value = '';
