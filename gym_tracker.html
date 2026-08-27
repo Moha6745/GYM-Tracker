@@ -1067,62 +1067,92 @@ function startRest(nextName, muscleName) {
   const dur = getRestDuration(muscleName || '');
   restSecs = dur; restTotal = dur;
 
+  // Save end timestamp to localStorage — survives backgrounding on iOS
+  const endTime = Date.now() + dur * 1000;
+  localStorage.setItem('restEndTime', endTime);
+  localStorage.setItem('restNextName', nextName);
+
   const updateUI = (s) => {
-    const el = document.getElementById('rest-num');
+    const secs = Math.max(0, s);
+    const el  = document.getElementById('rest-num');
     const bar = document.getElementById('rest-bar-fill');
-    if (el) el.textContent = s;
-    if (bar) bar.style.width = Math.round(s / restTotal * 100) + '%';
+    if (el)  el.textContent = secs;
+    if (bar) bar.style.width = Math.round(secs / restTotal * 100) + '%';
   };
 
   updateUI(restSecs);
-  document.getElementById('rest-next-label').textContent = 'Next: ' + nextName;
-  const isLarge = dur === 90;
-  document.getElementById('rest-type-label').textContent = isLarge ? '🏋️ Large Muscle — 90s' : '💪 Small Muscle — 60s';
-  document.getElementById('rest-overlay').style.display = 'flex';
+  document.getElementById('rest-next-label').textContent  = 'Next: ' + nextName;
+  document.getElementById('rest-type-label').textContent  = dur === 90 ? '🏋️ Large Muscle — 90s' : '💪 Small Muscle — 60s';
+  document.getElementById('rest-overlay').style.display   = 'flex';
 
-  // Use Web Worker if available (background-safe), else fallback to setInterval
+  // Stop any previous timers
+  if (restWorker) restWorker.postMessage({ cmd: 'stop' });
+  clearInterval(restIv);
+
+  const tick = () => {
+    const remaining = Math.round((endTime - Date.now()) / 1000);
+    restSecs = remaining;
+    updateUI(remaining);
+    if (remaining <= 0) {
+      if (restWorker) restWorker.postMessage({ cmd: 'stop' });
+      clearInterval(restIv);
+      localStorage.removeItem('restEndTime');
+      document.getElementById('rest-overlay').style.display = 'none';
+      playBeep();
+      sendNotification('✅ Rest Done!', `Time to start: ${nextName}`);
+    }
+  };
+
+  // Use Web Worker if available for background accuracy
   if (restWorker) {
     restWorker.onmessage = (e) => {
-      if (e.data.type === 'tick') {
-        restSecs = e.data.secs;
-        updateUI(restSecs);
-      } else if (e.data.type === 'done') {
-        document.getElementById('rest-overlay').style.display = 'none';
-        playBeep();
-        sendNotification('✅ Rest Done!', `Time to start: ${nextName}`);
-      }
+      if (e.data.type === 'tick' || e.data.type === 'done') tick();
     };
     restWorker.postMessage({ cmd: 'start', secs: dur });
-  } else {
-    clearInterval(restIv);
-    restIv = setInterval(() => {
-      restSecs--;
-      updateUI(restSecs);
-      if (restSecs <= 0) {
-        clearInterval(restIv);
-        document.getElementById('rest-overlay').style.display = 'none';
-        playBeep();
-        sendNotification('✅ Rest Done!', `Time to start: ${nextName}`);
-      }
-    }, 1000);
   }
+  // Always run setInterval too — covers iOS where Worker gets suspended
+  restIv = setInterval(tick, 500);
 }
+
+// When page becomes visible again — recalculate from saved timestamp
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  const endTime = localStorage.getItem('restEndTime');
+  if (!endTime) return;
+  const remaining = Math.round((parseInt(endTime) - Date.now()) / 1000);
+  const nextName  = localStorage.getItem('restNextName') || '—';
+  if (remaining <= 0) {
+    // Rest finished while away
+    localStorage.removeItem('restEndTime');
+    localStorage.removeItem('restNextName');
+    document.getElementById('rest-overlay').style.display = 'none';
+    playBeep();
+    sendNotification('✅ Rest Done!', `Time to start: ${nextName}`);
+    toast('⏱ Rest finished while you were away!');
+  } else {
+    // Resume with correct remaining time
+    restSecs = remaining;
+    document.getElementById('rest-num').textContent = remaining;
+    document.getElementById('rest-overlay').style.display = 'flex';
+  }
+});
 
 function skipRest() {
   if (restWorker) restWorker.postMessage({ cmd: 'stop' });
   clearInterval(restIv);
+  localStorage.removeItem('restEndTime');
+  localStorage.removeItem('restNextName');
   document.getElementById('rest-overlay').style.display = 'none';
 }
 
 function adjustRest(d) {
   restSecs = Math.max(10, restSecs + d);
   restTotal = Math.max(restTotal, restSecs);
+  // Update saved end time
+  localStorage.setItem('restEndTime', Date.now() + restSecs * 1000);
   document.getElementById('rest-num').textContent = restSecs;
   document.getElementById('rest-bar-fill').style.width = Math.round(restSecs / restTotal * 100) + '%';
-  // Restart worker with new time
-  if (restWorker) {
-    restWorker.postMessage({ cmd: 'start', secs: restSecs });
-  }
+  if (restWorker) restWorker.postMessage({ cmd: 'start', secs: restSecs });
 }
 
 // ─── STATS ───────────────────────────────────────────────────────────────────
