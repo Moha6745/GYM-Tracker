@@ -310,6 +310,24 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .dch-title{font-size:15px;font-weight:600;color:var(--t1)}
 .dch-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 
+/* CALENDAR PAGE */
+.cal-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.cal-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.06em;color:var(--t1)}
+.cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:1rem;font-size:11px;color:var(--t2)}
+.cal-legend span{display:inline-flex;align-items:center;gap:5px}
+.cal-legend-dot{width:12px;height:12px;border-radius:4px;display:inline-block}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-dow{text-align:center;font-size:10px;color:var(--t3);letter-spacing:.06em;padding-bottom:2px}
+.cal-cell{aspect-ratio:1;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;position:relative;transition:all .15s;padding:4px}
+.cal-cell:hover{border-color:var(--border2)}
+.cal-cell.empty{background:transparent;border-color:transparent;cursor:default}
+.cal-cell.gym{background:var(--green-s);border-color:var(--green)}
+.cal-cell.today{outline:2px solid var(--red);outline-offset:-2px}
+.cal-daynum{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--t2)}
+.cal-cell.gym .cal-daynum{color:var(--green);font-weight:600}
+.cal-ball{font-size:13px;line-height:1;cursor:pointer}
+.cal-ball.off{opacity:.15;filter:grayscale(1)}
+
 /* RESPONSIVE */
 @media(max-width:600px){
   .sets-grid{font-size:11px}
@@ -357,6 +375,7 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
       <button class="nav-tab" onclick="showPage('stats')">📊 Stats</button>
       <button class="nav-tab" onclick="showPage('prs')">🏆 PRs</button>
       <button class="nav-tab" onclick="showPage('macros')">🥗 Macros</button>
+      <button class="nav-tab" onclick="showPage('calendar')">📅 Calendar</button>
     </div>
   </div>
 </nav>
@@ -461,6 +480,24 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
       </div>
     </div>
   </div>
+</div>
+
+<!-- CALENDAR PAGE -->
+<div class="page" id="page-calendar">
+  <div class="cal-bar">
+    <div class="cal-title" id="cal-title">Month Year</div>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sm" onclick="calPrevMonth()">‹ Prev</button>
+      <button class="btn btn-sm" onclick="calToday()">Today</button>
+      <button class="btn btn-sm" onclick="calNextMonth()">Next ›</button>
+    </div>
+  </div>
+  <div class="cal-legend">
+    <span><span class="cal-legend-dot" style="background:var(--green-s);border:1px solid var(--green)"></span> يوم نادي (تمرين)</span>
+    <span>⚽ يوم كورة (اضغط لإخفاء/إظهار)</span>
+  </div>
+  <div class="cal-grid" id="cal-dow-row"></div>
+  <div class="cal-grid" id="cal-grid" style="margin-top:6px"></div>
 </div>
 
 <!-- REST OVERLAY -->
@@ -659,8 +696,8 @@ function save() {
 }
 
 window._onRemoteUpdate = (remote) => {
-  data = remote;
-  window._currentData = remote;
+  data = ensureData(remote);
+  window._currentData = data;
   if (currentUserId) localStorage.setItem(getLocalKey(currentUserId), JSON.stringify(data));
   renderLog();
   setSyncStatus('saved');
@@ -734,12 +771,17 @@ function switchUser() {
   showUserScreen();
 }
 
+function ensureData(d) {
+  if (d && !d.dayOverrides) d.dayOverrides = {};
+  return d;
+}
+
 async function loadUserData(uid) {
   // 1. Load local immediately
   const local = localStorage.getItem(getLocalKey(uid));
   let localData = local ? JSON.parse(local) : null;
   if (localData && localData.restDuration !== undefined) { delete localData.restDuration; localData = null; }
-  data = localData || JSON.parse(JSON.stringify(initData)); // deep copy for new users
+  data = ensureData(localData || JSON.parse(JSON.stringify(initData))); // deep copy for new users
   window._currentData = data;
   curWeek = 0; curDay = 0;
   document.getElementById('loading-screen').style.display = 'none';
@@ -750,8 +792,8 @@ async function loadUserData(uid) {
     try {
       const remote = await window._fbLoad(uid);
       if (remote && JSON.stringify(remote) !== JSON.stringify(data)) {
-        data = remote;
-        window._currentData = remote;
+        data = ensureData(remote);
+        window._currentData = data;
         localStorage.setItem(getLocalKey(uid), JSON.stringify(data));
         curWeek = 0; curDay = 0;
         renderLog();
@@ -785,6 +827,7 @@ function showPage(id) {
   event.target.classList.add('active');
   if (id === 'stats') renderStats();
   if (id === 'prs') renderPRs();
+  if (id === 'calendar') renderCalendar();
 }
 
 // ─── RENDER LOG ──────────────────────────────────────────────────────────────
@@ -822,6 +865,9 @@ function renderDay() {
   // English numerals only
   document.getElementById('day-prog-text').textContent = `${doneSets} / ${totalSets} sets done`;
 
+  const sessionDate = day.date || todayStr();
+  const gymLoggedToday = isGymDay(sessionDate);
+
   let html = `<div class="day-card-header">
     <div>
       <div class="dch-title">${day.name}</div>
@@ -833,6 +879,7 @@ function renderDay() {
       <span class="time-badge" onclick="setSessionTime()">
         <span class="tb-text">${day.time || '⏱ Set time'}</span>
       </span>
+      <button class="btn btn-sm ${gymLoggedToday ? 'btn-green' : 'btn-red'}" onclick="finishWorkout()" title="سجل هذا اليوم في التقويم">${gymLoggedToday ? '✅ مسجل بالتقويم' : '✅ انتهيت التمرين'}</button>
       <button class="btn btn-sm btn-red" onclick="showAddDay()" title="Add day">+ Day</button>
       <button class="btn btn-sm btn-danger" onclick="deleteDay(${curDay})" title="Delete this day">🗑</button>
     </div>
@@ -1367,6 +1414,90 @@ function renderPRs() {
     `).join('') + `</div>`;
 }
 
+// ─── ATTENDANCE CALENDAR ───────────────────────────────────────────────────────
+const DOW_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+let calYear, calMonth; // calMonth: 0-11
+
+function todayStr() {
+  const d = new Date();
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+function isGymDay(dateStr) {
+  return !!data.dayOverrides[dateStr]?.gym;
+}
+
+function isFootballDay(dateStr) {
+  const ov = data.dayOverrides[dateStr];
+  if (ov && ov.football !== undefined) return ov.football;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay() === 1; // Monday by default
+}
+
+function finishWorkout() {
+  const day = data.weeks[curWeek].days[curDay];
+  const ds = day.date || todayStr();
+  data.dayOverrides[ds] = { ...data.dayOverrides[ds], gym: true };
+  save();
+  renderDay();
+  toast('✅ تم تسجيل هذا اليوم في التقويم');
+}
+
+function toggleGymDay(dateStr) {
+  const cur = isGymDay(dateStr);
+  data.dayOverrides[dateStr] = { ...data.dayOverrides[dateStr], gym: !cur };
+  save();
+  renderCalendar();
+}
+
+function toggleFootball(dateStr, ev) {
+  ev.stopPropagation();
+  const cur = isFootballDay(dateStr);
+  data.dayOverrides[dateStr] = { ...data.dayOverrides[dateStr], football: !cur };
+  save();
+  renderCalendar();
+}
+
+function calPrevMonth() {
+  calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+function calNextMonth() {
+  calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendar();
+}
+function calToday() {
+  const t = new Date();
+  calYear = t.getFullYear(); calMonth = t.getMonth();
+  renderCalendar();
+}
+
+function renderCalendar() {
+  if (calYear === undefined) { const t = new Date(); calYear = t.getFullYear(); calMonth = t.getMonth(); }
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('cal-title').textContent = `${monthNames[calMonth]} ${calYear}`;
+
+  document.getElementById('cal-dow-row').innerHTML = DOW_LABELS.map(l => `<div class="cal-dow">${l}</div>`).join('');
+
+  const firstDow = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const todayS = todayStr();
+
+  let cells = '';
+  for (let i = 0; i < firstDow; i++) cells += `<div class="cal-cell empty"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${calYear}-${String(calMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const gym = isGymDay(ds);
+    const ball = isFootballDay(ds);
+    cells += `<div class="cal-cell ${gym ? 'gym' : ''} ${ds === todayS ? 'today' : ''}" onclick="toggleGymDay('${ds}')" title="اضغط لتحديد/إلغاء يوم تمرين">
+      <div class="cal-daynum">${d}</div>
+      <span class="cal-ball ${ball ? '' : 'off'}" onclick="toggleFootball('${ds}', event)" title="⚽ يوم كورة — اضغط للإخفاء/الإظهار">⚽</span>
+    </div>`;
+  }
+  document.getElementById('cal-grid').innerHTML = cells;
+}
 
 // ─── MACROS CALCULATOR ────────────────────────────────────────────────────────
 const MEALS = {
