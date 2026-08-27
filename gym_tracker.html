@@ -498,33 +498,7 @@ function getRestDuration(muscleName) {
   return 75; // default middle
 }
 
-// Web Audio API beep that works in background
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audioCtx = null;
-function playBeep() {
-  try {
-    if (!audioCtx) audioCtx = new AudioCtx();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    // 3 short beeps
-    [0, 0.25, 0.5].forEach(delay => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain); gain.connect(audioCtx.destination);
-      osc.frequency.value = 880;
-      osc.type = 'sine';
-      gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
-      gain.gain.linearRampToValueAtTime(0.6, audioCtx.currentTime + delay + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 0.18);
-      osc.start(audioCtx.currentTime + delay);
-      osc.stop(audioCtx.currentTime + delay + 0.2);
-    });
-  } catch(e) { console.log('Audio error:', e); }
-}
-// Unlock audio on first user interaction
-document.addEventListener('click', () => {
-  if (!audioCtx) { audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-}, { once: true });
+// ─── AUDIO & BACKGROUND TIMER ────────────────────────────────────────────────
 
 const initData = {
   weeks: [
@@ -1026,36 +1000,129 @@ function addDay() {
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
+// ─── AUDIO & BACKGROUND TIMER ────────────────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+
+function playBeep() {
+  try {
+    if (!audioCtx) audioCtx = new AudioCtx();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    // 5 beeps — louder and longer
+    [0, 0.3, 0.6, 0.9, 1.2].forEach(delay => {
+      const osc  = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
+      gain.gain.linearRampToValueAtTime(1.0, audioCtx.currentTime + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + 0.28);
+      osc.start(audioCtx.currentTime + delay);
+      osc.stop(audioCtx.currentTime + delay + 0.3);
+    });
+  } catch(e) { console.log('Audio error:', e); }
+}
+
+// Web Worker timer — keeps counting even when tab is backgrounded
+const workerCode = `
+  let iv = null;
+  self.onmessage = (e) => {
+    if (e.data.cmd === 'start') {
+      clearInterval(iv);
+      let secs = e.data.secs;
+      iv = setInterval(() => {
+        secs--;
+        self.postMessage({ type: 'tick', secs });
+        if (secs <= 0) { clearInterval(iv); self.postMessage({ type: 'done' }); }
+      }, 1000);
+    }
+    if (e.data.cmd === 'stop') clearInterval(iv);
+  };
+`;
+let restWorker = null;
+try {
+  const blob = new Blob([workerCode], { type: 'application/javascript' });
+  restWorker = new Worker(URL.createObjectURL(blob));
+} catch(e) { console.log('Worker not supported, using setInterval'); }
+
+// Request notification permission on first click
+document.addEventListener('click', () => {
+  if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}, { once: false });
+
+function sendNotification(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '💪', tag: 'rest-done' });
+  }
+}
+
 // ─── REST TIMER ──────────────────────────────────────────────────────────────
 function startRest(nextName, muscleName) {
-  // Unlock audio context on any user interaction (iOS requirement)
   if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   const dur = getRestDuration(muscleName || '');
   restSecs = dur; restTotal = dur;
-  document.getElementById('rest-num').textContent = restSecs;
-  document.getElementById('rest-bar-fill').style.width = '100%';
+
+  const updateUI = (s) => {
+    const el = document.getElementById('rest-num');
+    const bar = document.getElementById('rest-bar-fill');
+    if (el) el.textContent = s;
+    if (bar) bar.style.width = Math.round(s / restTotal * 100) + '%';
+  };
+
+  updateUI(restSecs);
   document.getElementById('rest-next-label').textContent = 'Next: ' + nextName;
-  // show duration type
   const isLarge = dur === 90;
   document.getElementById('rest-type-label').textContent = isLarge ? '🏋️ Large Muscle — 90s' : '💪 Small Muscle — 60s';
   document.getElementById('rest-overlay').style.display = 'flex';
-  clearInterval(restIv);
-  restIv = setInterval(() => {
-    restSecs--;
-    document.getElementById('rest-num').textContent = restSecs;
-    document.getElementById('rest-bar-fill').style.width = Math.round(restSecs / restTotal * 100) + '%';
-    if (restSecs <= 0) {
-      clearInterval(restIv);
-      document.getElementById('rest-overlay').style.display = 'none';
-      playBeep(); // audio alert when rest ends
-    }
-  }, 1000);
+
+  // Use Web Worker if available (background-safe), else fallback to setInterval
+  if (restWorker) {
+    restWorker.onmessage = (e) => {
+      if (e.data.type === 'tick') {
+        restSecs = e.data.secs;
+        updateUI(restSecs);
+      } else if (e.data.type === 'done') {
+        document.getElementById('rest-overlay').style.display = 'none';
+        playBeep();
+        sendNotification('✅ Rest Done!', `Time to start: ${nextName}`);
+      }
+    };
+    restWorker.postMessage({ cmd: 'start', secs: dur });
+  } else {
+    clearInterval(restIv);
+    restIv = setInterval(() => {
+      restSecs--;
+      updateUI(restSecs);
+      if (restSecs <= 0) {
+        clearInterval(restIv);
+        document.getElementById('rest-overlay').style.display = 'none';
+        playBeep();
+        sendNotification('✅ Rest Done!', `Time to start: ${nextName}`);
+      }
+    }, 1000);
+  }
 }
-function skipRest() { clearInterval(restIv); document.getElementById('rest-overlay').style.display = 'none'; }
+
+function skipRest() {
+  if (restWorker) restWorker.postMessage({ cmd: 'stop' });
+  clearInterval(restIv);
+  document.getElementById('rest-overlay').style.display = 'none';
+}
+
 function adjustRest(d) {
-  restSecs = Math.max(10, restSecs + d); restTotal = Math.max(restTotal, restSecs);
+  restSecs = Math.max(10, restSecs + d);
+  restTotal = Math.max(restTotal, restSecs);
   document.getElementById('rest-num').textContent = restSecs;
   document.getElementById('rest-bar-fill').style.width = Math.round(restSecs / restTotal * 100) + '%';
+  // Restart worker with new time
+  if (restWorker) {
+    restWorker.postMessage({ cmd: 'start', secs: restSecs });
+  }
 }
 
 // ─── STATS ───────────────────────────────────────────────────────────────────
