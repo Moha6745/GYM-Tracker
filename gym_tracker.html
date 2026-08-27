@@ -319,7 +319,6 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .cal-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.06em;color:var(--t1)}
 .cal-legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:1rem;font-size:11px;color:var(--t2)}
 .cal-legend span{display:inline-flex;align-items:center;gap:5px}
-.cal-legend-dot{width:12px;height:12px;border-radius:4px;display:inline-block}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
 .cal-dow{text-align:center;font-size:10px;color:var(--t3);letter-spacing:.06em;padding-bottom:2px}
 .cal-cell{aspect-ratio:1;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;position:relative;transition:all .15s;padding:4px}
@@ -330,7 +329,7 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .cal-daynum{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--t2)}
 .cal-cell.gym .cal-daynum{color:var(--green);font-weight:600}
 .cal-ball{font-size:13px;line-height:1;cursor:pointer}
-.cal-ball.off{opacity:.15;filter:grayscale(1)}
+.cal-muscle{font-size:13px;line-height:1}
 
 /* RESPONSIVE */
 @media(max-width:600px){
@@ -505,8 +504,8 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
     </div>
   </div>
   <div class="cal-legend">
-    <span><span class="cal-legend-dot" style="background:var(--green-s);border:1px solid var(--green)"></span> يوم نادي (تمرين)</span>
-    <span>⚽ يوم كورة (اضغط لإخفاء/إظهار)</span>
+    <span>💪 يوم نادي (تمرين)</span>
+    <span>⚽ يوم كورة — الاثنين تلقائياً (اضغط عليها لإخفائها)</span>
   </div>
   <div class="cal-grid" id="cal-dow-row"></div>
   <div class="cal-grid" id="cal-grid" style="margin-top:6px"></div>
@@ -1503,9 +1502,12 @@ function renderCalendar() {
     const ds = `${calYear}-${String(calMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const gym = isGymDay(ds);
     const ball = isFootballDay(ds);
+    const icon = ball
+      ? `<span class="cal-ball" onclick="toggleFootball('${ds}', event)" title="⚽ يوم كورة — اضغط للإخفاء">⚽</span>`
+      : (gym ? `<span class="cal-muscle" title="💪 يوم نادي">💪</span>` : '');
     cells += `<div class="cal-cell ${gym ? 'gym' : ''} ${ds === todayS ? 'today' : ''}" onclick="toggleGymDay('${ds}')" title="اضغط لتحديد/إلغاء يوم تمرين">
       <div class="cal-daynum">${d}</div>
-      <span class="cal-ball ${ball ? '' : 'off'}" onclick="toggleFootball('${ds}', event)" title="⚽ يوم كورة — اضغط للإخفاء/الإظهار">⚽</span>
+      ${icon}
     </div>`;
   }
   document.getElementById('cal-grid').innerHTML = cells;
