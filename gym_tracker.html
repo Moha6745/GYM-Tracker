@@ -166,6 +166,9 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .btn-xs{padding:3px 7px;font-size:10px}
 .btn-danger{color:#ff6b6b;border-color:transparent}
 .btn-danger:hover{background:rgba(255,107,107,.1);border-color:#ff6b6b}
+.btn-gold{background:var(--gold-s);border-color:var(--gold);color:var(--gold);animation:pulse 1.6s infinite}
+.btn-gold:hover{background:var(--gold);color:#fff}
+.workout-elapsed{font-size:12px;color:var(--gold);font-family:'IBM Plex Mono',monospace}
 
 /* TAGS */
 .tag{padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;letter-spacing:.05em}
@@ -674,6 +677,7 @@ const initData = {
 let curWeek = 0;
 let curDay = 0;
 let restIv = null, restSecs = 0, restTotal = 0;
+let workoutTimerIv = null;
 let _saveTimer = null;
 let data = null;
 let currentUserId = null; // e.g. "moha6745" or "khalid"
@@ -890,7 +894,12 @@ function renderDay() {
       <span class="time-badge" onclick="setSessionTime()">
         <span class="tb-text">${day.time || '⏱ Set time'}</span>
       </span>
-      <button class="btn btn-sm ${gymLoggedToday ? 'btn-green' : 'btn-red'}" onclick="finishWorkout()" title="سجل هذا اليوم في التقويم">${gymLoggedToday ? '✅ مسجل بالتقويم' : '✅ انتهيت التمرين'}</button>
+      ${day.startedAt ? `<span class="workout-elapsed" id="workout-elapsed">⏱ ${formatDuration(Date.now() - day.startedAt)}</span>` : ''}
+      ${day.startedAt
+        ? `<button class="btn btn-sm btn-gold" onclick="endWorkout()" title="أنهِ التمرين واحسب المدة">⏹ نهاية التمرين</button>`
+        : gymLoggedToday
+          ? `<button class="btn btn-sm btn-green" onclick="finishWorkout()" title="سجل هذا اليوم في التقويم">✅ مسجل بالتقويم</button>`
+          : `<button class="btn btn-sm btn-red" onclick="startWorkout()" title="ابدأ التمرين">▶ بداية التمرين</button>`}
       <button class="btn btn-sm btn-red" onclick="showAddDay()" title="Add day">+ Day</button>
       <button class="btn btn-sm btn-danger" onclick="deleteDay(${curDay})" title="Delete this day">🗑</button>
     </div>
@@ -1021,6 +1030,8 @@ function renderDay() {
   });
 
   document.getElementById('day-content').innerHTML = html;
+
+  if (day.startedAt) _launchWorkoutTimer(); else clearInterval(workoutTimerIv);
 }
 
 // ─── ACTIONS ─────────────────────────────────────────────────────────────────
@@ -1453,6 +1464,45 @@ function finishWorkout() {
   save();
   renderDay();
   toast('✅ تم تسجيل هذا اليوم في التقويم');
+}
+
+function formatDuration(ms) {
+  const totalMin = Math.max(1, Math.round(ms / 60000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h > 0 ? `${h}h ${m}min` : `${m}min`;
+}
+
+function startWorkout() {
+  const day = data.weeks[curWeek].days[curDay];
+  day.startedAt = Date.now();
+  save();
+  renderDay();
+  toast('▶ بدأ التمرين');
+}
+
+function endWorkout() {
+  const day = data.weeks[curWeek].days[curDay];
+  if (!day.startedAt) return;
+  const elapsed = Date.now() - day.startedAt;
+  day.time = formatDuration(elapsed);
+  delete day.startedAt;
+  const ds = day.date || todayStr();
+  data.dayOverrides[ds] = { ...data.dayOverrides[ds], gym: true };
+  clearInterval(workoutTimerIv);
+  save();
+  renderDay();
+  toast(`✅ انتهى التمرين — المدة ${day.time}`);
+}
+
+function _launchWorkoutTimer() {
+  clearInterval(workoutTimerIv);
+  workoutTimerIv = setInterval(() => {
+    const day = data.weeks[curWeek] && data.weeks[curWeek].days[curDay];
+    const el = document.getElementById('workout-elapsed');
+    if (!day || !day.startedAt || !el) { clearInterval(workoutTimerIv); return; }
+    el.textContent = '⏱ ' + formatDuration(Date.now() - day.startedAt);
+  }, 1000);
 }
 
 function toggleGymDay(dateStr) {
