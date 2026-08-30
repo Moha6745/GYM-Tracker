@@ -168,7 +168,10 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .btn-danger:hover{background:rgba(255,107,107,.1);border-color:#ff6b6b}
 .btn-gold{background:var(--gold-s);border-color:var(--gold);color:var(--gold);animation:pulse 1.6s infinite}
 .btn-gold:hover{background:var(--gold);color:#fff}
+.btn-pause{background:var(--blue-s);border-color:var(--blue);color:var(--blue)}
+.btn-pause:hover{background:var(--blue);color:#fff}
 .workout-elapsed{font-size:12px;color:var(--gold);font-family:'IBM Plex Mono',monospace}
+.workout-elapsed.paused{color:var(--t3)}
 
 /* TAGS */
 .tag{padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600;letter-spacing:.05em}
@@ -331,6 +334,7 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .cal-cell.today{outline:2px solid var(--red);outline-offset:-2px}
 .cal-daynum{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--t2)}
 .cal-cell.gym .cal-daynum{color:var(--green);font-weight:600}
+.cal-icons{display:flex;gap:3px;align-items:center}
 .cal-ball{font-size:13px;line-height:1;cursor:pointer}
 .cal-muscle{font-size:13px;line-height:1}
 
@@ -894,12 +898,7 @@ function renderDay() {
       <span class="time-badge" onclick="setSessionTime()">
         <span class="tb-text">${day.time || '⏱ Set time'}</span>
       </span>
-      ${day.startedAt ? `<span class="workout-elapsed" id="workout-elapsed">⏱ ${formatDuration(Date.now() - day.startedAt)}</span>` : ''}
-      ${day.startedAt
-        ? `<button class="btn btn-sm btn-gold" onclick="endWorkout()" title="أنهِ التمرين واحسب المدة">⏹ نهاية التمرين</button>`
-        : gymLoggedToday
-          ? `<button class="btn btn-sm btn-green" onclick="finishWorkout()" title="سجل هذا اليوم في التقويم">✅ مسجل بالتقويم</button>`
-          : `<button class="btn btn-sm btn-red" onclick="startWorkout()" title="ابدأ التمرين">▶ بداية التمرين</button>`}
+      ${workoutControlsHtml(day, gymLoggedToday)}
       <button class="btn btn-sm btn-red" onclick="showAddDay()" title="Add day">+ Day</button>
       <button class="btn btn-sm btn-danger" onclick="deleteDay(${curDay})" title="Delete this day">🗑</button>
     </div>
@@ -1031,7 +1030,27 @@ function renderDay() {
 
   document.getElementById('day-content').innerHTML = html;
 
-  if (day.startedAt) _launchWorkoutTimer(); else clearInterval(workoutTimerIv);
+  if (day.workoutRunningSince) _launchWorkoutTimer(); else clearInterval(workoutTimerIv);
+}
+
+function workoutControlsHtml(day, gymLoggedToday) {
+  const isRunning = day.workoutRunningSince != null;
+  const isPaused  = !isRunning && day.workoutElapsedMs != null;
+
+  if (isRunning) {
+    return `<span class="workout-elapsed" id="workout-elapsed">⏱ ${formatDuration(_currentElapsedMs(day))}</span>
+      <button class="btn btn-sm btn-pause" onclick="pauseWorkout()" title="إيقاف التمرين مؤقتاً">⏸ إيقاف مؤقت</button>
+      <button class="btn btn-sm btn-gold" onclick="endWorkout()" title="أنهِ التمرين واحسب المدة">⏹ نهاية التمرين</button>`;
+  }
+  if (isPaused) {
+    return `<span class="workout-elapsed paused" id="workout-elapsed">⏸ ${formatDuration(_currentElapsedMs(day))}</span>
+      <button class="btn btn-sm btn-red" onclick="resumeWorkout()" title="استئناف التمرين">▶ استئناف</button>
+      <button class="btn btn-sm btn-gold" onclick="endWorkout()" title="أنهِ التمرين واحسب المدة">⏹ نهاية التمرين</button>`;
+  }
+  if (gymLoggedToday) {
+    return `<button class="btn btn-sm btn-green" onclick="finishWorkout()" title="سجل هذا اليوم في التقويم">✅ مسجل بالتقويم</button>`;
+  }
+  return `<button class="btn btn-sm btn-red" onclick="startWorkout()" title="ابدأ التمرين">▶ بداية التمرين</button>`;
 }
 
 // ─── ACTIONS ─────────────────────────────────────────────────────────────────
@@ -1473,20 +1492,47 @@ function formatDuration(ms) {
   return h > 0 ? `${h}h ${m}min` : `${m}min`;
 }
 
+function _currentElapsedMs(day) {
+  let ms = day.workoutElapsedMs || 0;
+  if (day.workoutRunningSince) ms += Date.now() - day.workoutRunningSince;
+  return ms;
+}
+
 function startWorkout() {
   const day = data.weeks[curWeek].days[curDay];
-  day.startedAt = Date.now();
+  day.workoutElapsedMs = 0;
+  day.workoutRunningSince = Date.now();
   save();
   renderDay();
   toast('▶ بدأ التمرين');
 }
 
+function pauseWorkout() {
+  const day = data.weeks[curWeek].days[curDay];
+  if (!day.workoutRunningSince) return;
+  day.workoutElapsedMs = _currentElapsedMs(day);
+  delete day.workoutRunningSince;
+  clearInterval(workoutTimerIv);
+  save();
+  renderDay();
+  toast('⏸ التمرين متوقف مؤقتاً');
+}
+
+function resumeWorkout() {
+  const day = data.weeks[curWeek].days[curDay];
+  if (day.workoutRunningSince) return;
+  day.workoutRunningSince = Date.now();
+  save();
+  renderDay();
+  toast('▶ استؤنف التمرين');
+}
+
 function endWorkout() {
   const day = data.weeks[curWeek].days[curDay];
-  if (!day.startedAt) return;
-  const elapsed = Date.now() - day.startedAt;
-  day.time = formatDuration(elapsed);
-  delete day.startedAt;
+  if (day.workoutRunningSince == null && day.workoutElapsedMs == null) return;
+  day.time = formatDuration(_currentElapsedMs(day));
+  delete day.workoutElapsedMs;
+  delete day.workoutRunningSince;
   const ds = day.date || todayStr();
   data.dayOverrides[ds] = { ...data.dayOverrides[ds], gym: true };
   clearInterval(workoutTimerIv);
@@ -1500,8 +1546,8 @@ function _launchWorkoutTimer() {
   workoutTimerIv = setInterval(() => {
     const day = data.weeks[curWeek] && data.weeks[curWeek].days[curDay];
     const el = document.getElementById('workout-elapsed');
-    if (!day || !day.startedAt || !el) { clearInterval(workoutTimerIv); return; }
-    el.textContent = '⏱ ' + formatDuration(Date.now() - day.startedAt);
+    if (!day || !day.workoutRunningSince || !el) { clearInterval(workoutTimerIv); return; }
+    el.textContent = '⏱ ' + formatDuration(_currentElapsedMs(day));
   }, 1000);
 }
 
@@ -1552,12 +1598,11 @@ function renderCalendar() {
     const ds = `${calYear}-${String(calMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const gym = isGymDay(ds);
     const ball = isFootballDay(ds);
-    const icon = ball
-      ? `<span class="cal-ball" onclick="toggleFootball('${ds}', event)" title="⚽ يوم كورة — اضغط للإخفاء">⚽</span>`
-      : (gym ? `<span class="cal-muscle" title="💪 يوم نادي">💪</span>` : '');
+    const icon = (gym ? `<span class="cal-muscle" title="💪 يوم نادي">💪</span>` : '')
+      + (ball ? `<span class="cal-ball" onclick="toggleFootball('${ds}', event)" title="⚽ يوم كورة — اضغط للإخفاء">⚽</span>` : '');
     cells += `<div class="cal-cell ${gym ? 'gym' : ''} ${ds === todayS ? 'today' : ''}" onclick="toggleGymDay('${ds}')" title="اضغط لتحديد/إلغاء يوم تمرين">
       <div class="cal-daynum">${d}</div>
-      ${icon}
+      <div class="cal-icons">${icon}</div>
     </div>`;
   }
   document.getElementById('cal-grid').innerHTML = cells;
