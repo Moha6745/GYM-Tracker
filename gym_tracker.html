@@ -803,6 +803,7 @@ async function loadUserData(uid) {
   data = ensureData(localData || JSON.parse(JSON.stringify(initData))); // deep copy for new users
   window._currentData = data;
   curWeek = 0; curDay = 0;
+  _resumeInProgressWorkout();
   document.getElementById('loading-screen').style.display = 'none';
   renderLog();
 
@@ -815,12 +816,32 @@ async function loadUserData(uid) {
         window._currentData = data;
         localStorage.setItem(getLocalKey(uid), JSON.stringify(data));
         curWeek = 0; curDay = 0;
+        _resumeInProgressWorkout();
         renderLog();
         toast('📡 تم تحميل البيانات من السحابة');
       }
       setSyncStatus('saved');
     } catch(e) { setSyncStatus('error'); }
   } else { setSyncStatus('error'); }
+}
+
+// If a workout is still running or paused (e.g. tab was closed mid-session),
+// jump straight to that day instead of silently defaulting to day 1 —
+// the timer keeps counting off the stored timestamp either way, but the
+// user should land back where they left off.
+function _resumeInProgressWorkout() {
+  for (let wi = 0; wi < data.weeks.length; wi++) {
+    const days = data.weeks[wi].days;
+    for (let di = 0; di < days.length; di++) {
+      const d = days[di];
+      if (d.workoutRunningSince != null || d.workoutElapsedMs != null) {
+        curWeek = wi; curDay = di;
+        toast(`⏱ التمرين "${d.name}" لسا شغال — المدة الحالية ${formatDuration(_currentElapsedMs(d))}`);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -1352,6 +1373,17 @@ document.addEventListener('visibilitychange', () => {
     restTotal = Math.max(restTotal, remaining);
     _launchRestTimer(parseInt(endTime), nextName);
   }
+});
+
+// Resync the workout-duration counter the instant the tab regains focus —
+// setInterval can get throttled/frozen while backgrounded, but the elapsed
+// time itself is derived from stored timestamps, so it's always correct
+// the moment we recompute it here.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!data) return;
+  const day = data.weeks[curWeek] && data.weeks[curWeek].days[curDay];
+  if (day && day.workoutRunningSince) _launchWorkoutTimer();
 });
 
 function skipRest() {
