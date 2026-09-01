@@ -1069,7 +1069,8 @@ function workoutControlsHtml(day, gymLoggedToday) {
       <button class="btn btn-sm btn-gold" onclick="endWorkout()" title="أنهِ التمرين واحسب المدة">⏹ نهاية التمرين</button>`;
   }
   if (gymLoggedToday) {
-    return `<button class="btn btn-sm btn-green" onclick="finishWorkout()" title="سجل هذا اليوم في التقويم">✅ مسجل بالتقويم</button>`;
+    return `<button class="btn btn-sm btn-green" onclick="finishWorkout()" title="سجل هذا اليوم في التقويم">✅ مسجل بالتقويم</button>
+      <button class="btn btn-sm btn-danger" onclick="resetWorkoutLog()" title="إلغاء التسجيل ورجوع اليوم لحالة بداية التمرين">↺</button>`;
   }
   return `<button class="btn btn-sm btn-red" onclick="startWorkout()" title="ابدأ التمرين">▶ بداية التمرين</button>`;
 }
@@ -1532,6 +1533,9 @@ function _currentElapsedMs(day) {
 
 function startWorkout() {
   const day = data.weeks[curWeek].days[curDay];
+  // The session is happening now, so it belongs on today's calendar date —
+  // not whatever stale date the day template was carrying.
+  day.date = todayStr();
   day.workoutElapsedMs = 0;
   day.workoutRunningSince = Date.now();
   save();
@@ -1571,6 +1575,25 @@ function endWorkout() {
   save();
   renderDay();
   toast(`✅ انتهى التمرين — المدة ${day.time}`);
+}
+
+function resetWorkoutLog() {
+  const day = data.weeks[curWeek].days[curDay];
+  if (!confirm(`إلغاء تسجيل "${day.name}" من التقويم ومسح مدته؟`)) return;
+  const ds = day.date || todayStr();
+  const ov = data.dayOverrides[ds];
+  if (ov) {
+    delete ov.gym;
+    if (Object.keys(ov).length === 0) delete data.dayOverrides[ds];
+  }
+  day.time = '';
+  day.date = '';
+  delete day.workoutElapsedMs;
+  delete day.workoutRunningSince;
+  clearInterval(workoutTimerIv);
+  save();
+  renderDay();
+  toast('↺ رجع اليوم لحالة "بداية التمرين"');
 }
 
 function _launchWorkoutTimer() {
