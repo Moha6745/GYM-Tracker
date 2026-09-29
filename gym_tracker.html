@@ -162,6 +162,8 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .btn-ghost-red{color:var(--red);border-color:transparent}
 .btn-ghost-red:hover{background:var(--red-s);border-color:var(--red)}
 .btn-ghost-red:hover{color:var(--red)}
+.btn-watch{color:var(--blue);border-color:var(--blue);background:var(--blue-s);text-decoration:none}
+.btn-watch:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
 .btn-sm{padding:4px 8px;font-size:11px}
 .btn-xs{padding:3px 7px;font-size:10px}
 .btn-danger{color:#ff6b6b;border-color:transparent}
@@ -388,6 +390,7 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
       <span class="sync-label" id="sync-label">—</span>
     </div>
     <span id="nav-username" class="nav-user-badge" onclick="switchUser()" title="تبديل المستخدم">👤 <span id="nav-username-text"></span></span>
+    <button class="nav-tab" onclick="showPlanModal(false)" title="تعديل الجدول / أيام التمرين" style="font-size:15px;padding:4px 10px">⚙️</button>
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="showPage('log')">📋 Log</button>
       <button class="nav-tab" onclick="showPage('stats')">📊 Stats</button>
@@ -539,6 +542,27 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
   </div>
 </div>
 
+<!-- TRAINING PLAN MODAL -->
+<div class="modal-overlay" id="modal-plan">
+  <div class="modal" dir="rtl">
+    <div class="modal-title" id="plan-title">اختر جدولك</div>
+    <div class="form-label" id="plan-warning" style="display:none;color:var(--red);margin-bottom:.75rem"></div>
+    <div class="form-row">
+      <div class="form-label">كم يوم تقدر تتمرن في الأسبوع؟</div>
+      <div class="selector-row" id="plan-days" style="margin-bottom:0"></div>
+    </div>
+    <div class="form-row" id="plan-opt-row" style="display:none">
+      <div class="form-label">اختر نوع الجدول</div>
+      <div id="plan-options" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+    <div class="form-row" id="plan-preview" style="font-size:11px;color:var(--t3)"></div>
+    <div class="modal-actions">
+      <button class="btn" id="plan-cancel" onclick="closeModal('modal-plan')">إلغاء</button>
+      <button class="btn btn-red" id="plan-apply" onclick="applyPlan()">تأكيد</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADD EXERCISE MODAL -->
 <div class="modal-overlay" id="modal-ex">
   <div class="modal">
@@ -592,90 +616,87 @@ function getRestDuration(muscleName) {
 
 // ─── AUDIO & BACKGROUND TIMER ────────────────────────────────────────────────
 
-const initData = {
-  weeks: [
-    { name:"Week 1", days:[
-      { name:"Day 1 — Upper", date:"2026-04-19", notes:"", time:"",
-        exercises:[
-          {name:"Incline Dumbbell Press",muscle:"Chest",sets:[{w:37.5,r:5,done:true},{w:37.5,r:5,done:true},{w:32.5,r:8,done:true},{w:null,r:null,done:false}]},
-          {name:"Lat Pulldown",muscle:"Back",sets:[{w:160,r:8,done:true},{w:160,r:8,done:true},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Hammer Strength Flat Press",muscle:"Chest",sets:[{w:32.5,r:8,done:true},{w:32.5,r:8,done:true},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Seated Row",muscle:"Back",sets:[{w:60,r:6,done:true},{w:60,r:6,done:true},{w:60,r:10,done:true},{w:null,r:null,done:false}]},
-          {name:"Lateral Raises",muscle:"Shoulders",sets:[{w:12,r:12,done:true},{w:7.5,r:12,done:true},{w:7.5,r:12,done:true},{w:7.5,r:12,done:true}]},
-          {name:"Hyperextension",muscle:"Lower Back",sets:[{w:15,r:12,done:true},{w:15,r:12,done:true},{w:15,r:12,done:true},{w:15,r:12,done:true}]},
-        ]},
-      { name:"Day 2 — Lower", date:"2026-04-20", notes:"", time:"",
-        exercises:[
-          {name:"Leg Press",muscle:"Quads",sets:[{w:100,r:10,done:true},{w:100,r:10,done:true},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Leg Extension",muscle:"Quads",sets:[{w:245,r:12,done:true},{w:245,r:12,done:true},{w:245,r:12,done:true},{w:null,r:null,done:false}]},
-          {name:"Seated Leg Curl",muscle:"Hamstrings",sets:[{w:180,r:8,done:true},{w:170,r:8,done:true},{w:170,r:8,done:true},{w:null,r:null,done:false}]},
-          {name:"Adductor / Abductor Machine",muscle:"Adductors",sets:[{w:130,r:12,done:true},{w:130,r:12,done:true},{w:130,r:12,done:true},{w:null,r:null,done:false}]},
-          {name:"Calf Raises",muscle:"Calves",sets:[{w:200,r:12,done:true},{w:200,r:12,done:true},{w:200,r:12,done:true},{w:null,r:null,done:false}]},
-          {name:"Cable Crunch (Core)",muscle:"Core",sets:[{w:15,r:15,done:true},{w:15,r:15,done:true},{w:15,r:15,done:true},{w:null,r:null,done:false}]},
-        ]},
-      { name:"Day 3 — Upper", date:"2026-04-26", notes:"", time:"",
-        exercises:[
-          {name:"Seated Row",muscle:"Back",sets:[{w:75,r:8,done:true},{w:75,r:9,done:true},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Flat Dumbbell Press",muscle:"Chest",sets:[{w:35,r:6,done:true},{w:32,r:6,done:true},{w:32,r:6,done:true},{w:null,r:null,done:false}]},
-          {name:"Lat Seated Row (Wide Grip)",muscle:"Back",sets:[{w:70,r:10,done:true},{w:70,r:10,done:true},{w:70,r:8,done:true},{w:null,r:null,done:false}]},
-          {name:"Hammer Strength Incline Press",muscle:"Chest",sets:[{w:35,r:8,done:true},{w:35,r:5,done:true},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Bicep Curl (Barbell)",muscle:"Biceps",sets:[{w:15,r:10,done:true},{w:15,r:10,done:true},{w:15,r:8,done:true},{w:15,r:8,done:true}]},
-          {name:"Triceps Pushdown (Cable)",muscle:"Triceps",sets:[{w:57.5,r:10,done:true},{w:57.5,r:10,done:true},{w:57.5,r:10,done:true},{w:57.5,r:10,done:true}]},
-        ]},
-      { name:"Day 4 — Lower + Shoulders", date:"2026-05-01", notes:"", time:"",
-        exercises:[
-          {name:"Shoulder Press (Machine/DB)",muscle:"Shoulders",sets:[{w:25,r:8,done:true},{w:25,r:8,done:true},{w:25,r:8,done:true},{w:null,r:null,done:false}]},
-          {name:"Lateral Raises",muscle:"Shoulders",sets:[{w:7.5,r:8,done:true},{w:7.5,r:8,done:true},{w:7.5,r:10,done:true},{w:null,r:null,done:false}]},
-          {name:"Leg Press",muscle:"Quads",sets:[{w:120,r:8,done:true},{w:120,r:8,done:true},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Seated Leg Curl",muscle:"Hamstrings",sets:[{w:170,r:10,done:true},{w:170,r:10,done:true},{w:170,r:10,done:true},{w:null,r:null,done:false}]},
-          {name:"Single Leg Extension",muscle:"Quads",sets:[{w:120,r:10,done:true},{w:125,r:10,done:true},{w:125,r:10,done:true},{w:null,r:null,done:false}]},
-          {name:"Hip Thrust",muscle:"Glutes / Hamstrings",sets:[{w:15,r:10,done:true},{w:15,r:10,done:true},{w:15,r:10,done:true},{w:null,r:null,done:false}]},
-          {name:"Calf Raises",muscle:"Calves",sets:[{w:35,r:10,done:true},{w:35,r:10,done:true},{w:35,r:10,done:true},{w:null,r:null,done:false}]},
-          {name:"Cable Crunch (Core)",muscle:"Core",sets:[{w:15,r:12,done:true},{w:15,r:12,done:true},{w:15,r:12,done:true},{w:null,r:null,done:false}]},
-        ]},
-    ]},
-    { name:"Week 2", days:[
-      { name:"Day 1 — Upper", date:"", notes:"", time:"",
-        exercises:[
-          {name:"Incline Dumbbell Press",muscle:"Chest",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Lat Pulldown",muscle:"Back",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Hammer Strength Flat Press",muscle:"Chest",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Seated Row",muscle:"Back",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Lateral Raises",muscle:"Shoulders",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Hyperextension",muscle:"Lower Back",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-        ]},
-      { name:"Day 2 — Lower", date:"", notes:"", time:"",
-        exercises:[
-          {name:"Leg Press",muscle:"Quads",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Leg Extension",muscle:"Quads",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Seated Leg Curl",muscle:"Hamstrings",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Adductor / Abductor Machine",muscle:"Adductors",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Calf Raises",muscle:"Calves",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Cable Crunch (Core)",muscle:"Core",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-        ]},
-      { name:"Day 3 — Upper", date:"", notes:"", time:"",
-        exercises:[
-          {name:"Seated Row",muscle:"Back",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Flat Dumbbell Press",muscle:"Chest",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Lat Seated Row (Wide Grip)",muscle:"Back",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Hammer Strength Incline Press",muscle:"Chest",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Bicep Curl (Barbell)",muscle:"Biceps",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Triceps Pushdown (Cable)",muscle:"Triceps",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-        ]},
-      { name:"Day 4 — Lower + Shoulders", date:"", notes:"", time:"",
-        exercises:[
-          {name:"Shoulder Press (Machine/DB)",muscle:"Shoulders",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Lateral Raises",muscle:"Shoulders",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Leg Press",muscle:"Quads",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Seated Leg Curl",muscle:"Hamstrings",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Single Leg Extension",muscle:"Quads",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Hip Thrust",muscle:"Glutes / Hamstrings",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Calf Raises",muscle:"Calves",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-          {name:"Cable Crunch (Core)",muscle:"Core",sets:[{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false},{w:null,r:null,done:false}]},
-        ]},
-    ]},
-  ]
+// ─── PROGRAMS (from the coach's PDFs) ────────────────────────────────────────
+// key: [name, muscle, tutorial url]
+const EXC = {
+  legpress:['Leg Press Machine','Quads','https://youtu.be/B8KqmwdomoU'],
+  hack:['Hack Squat Machine','Quads','https://www.youtube.com/shorts/fl4PtdimZSk'],
+  legext:['Leg Extension Machine','Quads','https://youtu.be/4ZDm5EbiFI8'],
+  seatedcurl:['Seated Leg Curl Machine','Hamstrings','https://www.youtube.com/watch?v=fK0uZ3KRZRI'],
+  lyingcurl:['Lying Leg Curl Machine','Hamstrings','https://youtu.be/SbSNUXPRkc8'],
+  hipthrust:['Hip Thrust Machine','Glutes','https://youtu.be/ZSPmIyX9RZs'],
+  calf:['Standing Calf Raise Machine','Calves','https://www.youtube.com/watch?v=yYBAQGtpIyM'],
+  crunch:['Cable Crunch','Core','https://www.youtube.com/watch?v=kc0PRn372lo'],
+  chest:['Chest Press Machine','Chest','https://www.youtube.com/shorts/Qu7-ceCvq7w'],
+  incline:['Incline Chest Press Machine','Chest','https://youtu.be/08RbKfmJ3VA'],
+  pecdeck:['Pec Deck / Chest Fly Machine','Chest','https://www.youtube.com/watch?v=wsNAD1BpiaE'],
+  lat:['Lat Pulldown Machine','Back','https://www.youtube.com/watch?v=U3Y_NsyDq60'],
+  seatedrow:['Seated Row Machine','Back','https://www.youtube.com/watch?v=TeFo51Q_Nsc'],
+  tbar:['T-Bar Row Machine','Back','https://youtu.be/w0KnlQ-b7jw'],
+  shoulder:['Shoulder Press Machine','Shoulders','https://www.youtube.com/watch?v=3R14MnZbcpw'],
+  lateral:['Lateral Raise Machine','Shoulders','https://youtu.be/Z5FA9aq3L6A'],
+  reardelt:['Rear Delt Machine','Shoulders','https://www.youtube.com/watch?v=p4JYxOddrQk'],
+  preacher:['Preacher Curl Machine','Biceps','https://www.youtube.com/watch?v=F33L5PuiCH8'],
+  cablecurl:['Cable Curl','Biceps','https://www.youtube.com/watch?v=OsQupgowb00'],
+  revcurl:['Cable Reverse Curl','Biceps','https://www.youtube.com/watch?v=fZJTIydOIxg'],
+  pushdown:['Triceps Pushdown','Triceps','https://www.youtube.com/watch?v=-zLyUAo1gMw'],
+  triext:['Triceps Extension Machine','Triceps','https://www.youtube.com/watch?v=1N3ULjM7-Jw'],
 };
+const PROGRAMS = {
+  3: [
+    { id:'fb3', label:'Full Body', days:[
+      ['Full Body', ['legpress','chest','lat','shoulder','seatedcurl','preacher','pushdown','calf']],
+      ['Full Body', ['hack','incline','tbar','shoulder','lyingcurl','cablecurl','triext','crunch']],
+      ['Full Body', ['legext','tbar','lat','lateral','hipthrust','revcurl','calf','crunch']],
+    ]},
+  ],
+  4: [
+    { id:'ul4', label:'Upper / Lower', days:[
+      ['Upper', ['chest','incline','lat','tbar','shoulder','lateral','preacher','pushdown']],
+      ['Lower', ['legpress','legext','seatedcurl','calf','crunch']],
+      ['Upper', ['chest','incline','lat','tbar','lateral','cablecurl','revcurl']],
+      ['Lower', ['hack','legext','lyingcurl','hipthrust','calf','crunch']],
+    ]},
+    { id:'fb4', label:'Full Body', days:[
+      ['Full Body', ['legpress','chest','seatedrow','shoulder','seatedcurl','preacher','pushdown','calf']],
+      ['Full Body', ['hack','incline','lat','lateral','lyingcurl','cablecurl','triext','crunch']],
+      ['Full Body', ['legext','chest','tbar','hipthrust','revcurl','calf','crunch']],
+      ['Full Body', ['legpress','incline','seatedrow','shoulder','seatedcurl','cablecurl','triext']],
+    ]},
+  ],
+  5: [
+    { id:'ppl5', label:'Push / Pull / Legs / Upper / Lower', days:[
+      ['Push', ['chest','incline','shoulder','lateral','pushdown']],
+      ['Pull', ['lat','seatedrow','tbar','cablecurl','revcurl']],
+      ['Legs', ['legpress','legext','seatedcurl','calf','crunch']],
+      ['Upper', ['incline','tbar','lateral','preacher','triext']],
+      ['Lower', ['hack','legext','lyingcurl','hipthrust','calf','crunch']],
+    ]},
+    { id:'ul5', label:'Upper / Lower ×2 + Upper', days:[
+      ['Upper', ['chest','incline','lat','tbar','shoulder','lateral','preacher','pushdown']],
+      ['Lower', ['legpress','legext','seatedcurl','calf','crunch']],
+      ['Upper', ['chest','lat','tbar','lateral','preacher','pushdown']],
+      ['Lower', ['hack','legext','lyingcurl','hipthrust','calf','crunch']],
+      ['Upper', ['pecdeck','tbar','lat','reardelt','preacher','pushdown','revcurl']],
+    ]},
+  ],
+};
+const DEFAULT_SETS = 3;
+function newSet() { return { w: null, r: null, rir: null, done: false }; }
+function findProgram(days, id) {
+  const opts = PROGRAMS[days] || [];
+  return opts.find(o => o.id === id) || opts[0];
+}
+function buildDays(days, id) {
+  const p = findProgram(days, id);
+  return p.days.map(([label, keys], i) => ({
+    name: `Day ${i + 1} — ${label}`, date: '', notes: '', time: '',
+    exercises: keys.map(k => {
+      const [name, muscle, url] = EXC[k];
+      return { name, muscle, url, sets: Array.from({ length: DEFAULT_SETS }, newSet) };
+    }),
+  }));
+}
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let curWeek = 0;
@@ -792,6 +813,7 @@ function switchUser() {
 
 function ensureData(d) {
   if (d && !d.dayOverrides) d.dayOverrides = {};
+  if (d && !Array.isArray(d.weeks)) d.weeks = [];
   return d;
 }
 
@@ -800,9 +822,26 @@ async function loadUserData(uid) {
   const local = localStorage.getItem(getLocalKey(uid));
   let localData = local ? JSON.parse(local) : null;
   if (localData && localData.restDuration !== undefined) { delete localData.restDuration; localData = null; }
-  data = ensureData(localData || JSON.parse(JSON.stringify(initData))); // deep copy for new users
-  window._currentData = data;
   curWeek = 0; curDay = 0;
+
+  if (!localData) {
+    // No local copy: check the cloud before treating this as a first-time user
+    document.getElementById('loading-screen').style.display = 'flex';
+    let remote = null;
+    if (window._fbLoad) { try { remote = await window._fbLoad(uid); } catch(e) {} }
+    data = ensureData(remote || { weeks: [] });
+    window._currentData = data;
+    if (remote) localStorage.setItem(getLocalKey(uid), JSON.stringify(data));
+    setSyncStatus(remote ? 'saved' : 'error');
+    _resumeInProgressWorkout();
+    document.getElementById('loading-screen').style.display = 'none';
+    renderLog();
+    if (!data.weeks.length) showPlanModal(true);
+    return;
+  }
+
+  data = ensureData(localData);
+  window._currentData = data;
   _resumeInProgressWorkout();
   document.getElementById('loading-screen').style.display = 'none';
   renderLog();
@@ -872,6 +911,15 @@ function showPage(id) {
 
 // ─── RENDER LOG ──────────────────────────────────────────────────────────────
 function renderLog() {
+  if (!data.weeks.length) {
+    document.getElementById('week-title').textContent = '—';
+    document.getElementById('week-tabs').innerHTML = '';
+    document.getElementById('day-tabs').innerHTML = '';
+    document.getElementById('day-prog').style.width = '0%';
+    document.getElementById('day-prog-text').textContent = '0 / 0 sets done';
+    document.getElementById('day-content').innerHTML = `<div style="text-align:center;padding:2rem 0"><button class="btn btn-red" onclick="showPlanModal(true)">اختر جدولك للبدء</button></div>`;
+    return;
+  }
   const w = data.weeks[curWeek];
   document.getElementById('week-title').textContent = w.name;
 
@@ -957,6 +1005,7 @@ function renderDay() {
               </div>
             </div>
             <div class="ex-actions" style="flex-shrink:0">
+              ${watchLink(ex)}
               <span class="tag tag-green">✓ Done</span>
               <span class="accordion-arrow">▸</span>
             </div>
@@ -1001,6 +1050,7 @@ function renderDay() {
             </div>
           </div>
           <div class="ex-actions">
+            ${watchLink(ex)}
             <span class="tag tag-red">${doneCount}/${n}</span>
             <button class="btn btn-xs btn-danger" onclick="deleteExercise(${ei})" title="Remove">✕</button>
             <button class="btn btn-xs" onclick="moveEx(${ei},-1)" title="Move up">↑</button>
@@ -1052,6 +1102,10 @@ function renderDay() {
   document.getElementById('day-content').innerHTML = html;
 
   if (day.workoutRunningSince) _launchWorkoutTimer(); else clearInterval(workoutTimerIv);
+}
+
+function watchLink(ex) {
+  return ex.url ? `<a class="btn btn-xs btn-watch" href="${ex.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="شاهد شرح التمرين">▶ شاهد</a>` : '';
 }
 
 function workoutControlsHtml(day, gymLoggedToday) {
@@ -1200,21 +1254,74 @@ function addWeek() {
       time: '',
       exercises: d.exercises.map(ex => ({
         ...ex,
-        sets: ex.sets.map(s => ({ w: null, r: null, rir: null, done: false }))
+        // keep weights & reps from the source week, only reset progress
+        sets: ex.sets.map(s => ({ ...s, done: false }))
       }))
     }));
+    days.forEach(d => { delete d.workoutRunningSince; delete d.workoutElapsedMs; });
+  } else if (data.plan) {
+    days = buildDays(data.plan.days, data.plan.option);
   } else {
     days = [
-      { name: 'Day 1 — Upper', date: '', notes: '', time: '', exercises: [] },
-      { name: 'Day 2 — Lower', date: '', notes: '', time: '', exercises: [] },
-      { name: 'Day 3 — Upper', date: '', notes: '', time: '', exercises: [] },
-      { name: 'Day 4 — Lower + Shoulders', date: '', notes: '', time: '', exercises: [] },
+      { name: 'Day 1', date: '', notes: '', time: '', exercises: [] },
     ];
   }
   data.weeks.push({ name, days });
   curWeek = data.weeks.length - 1; curDay = 0;
   save(); closeModal('modal-week'); renderLog(); toast(`${name} created`);
 }
+// ─── TRAINING PLAN ───────────────────────────────────────────────────────────
+let planSel = { days: null, option: null };
+let planOnboarding = false;
+
+function showPlanModal(onboarding) {
+  planOnboarding = !!onboarding;
+  const cur = data && data.plan;
+  planSel = cur ? { days: cur.days, option: cur.option } : { days: null, option: null };
+  document.getElementById('plan-title').textContent = onboarding ? 'مرحباً! اختر جدولك' : 'تعديل الجدول';
+  document.getElementById('plan-cancel').style.display = onboarding ? 'none' : '';
+  const warn = document.getElementById('plan-warning');
+  warn.style.display = onboarding ? 'none' : 'block';
+  warn.textContent = onboarding ? '' : '⚠️ سيتم استبدال تمارين الأسبوع الحالي بالجدول الجديد (الأسابيع الأخرى لا تتغير).';
+  renderPlanModal();
+  openModal('modal-plan');
+}
+
+function pickPlanDays(n) {
+  planSel.days = n;
+  planSel.option = PROGRAMS[n][0].id;
+  renderPlanModal();
+}
+function pickPlanOption(id) { planSel.option = id; renderPlanModal(); }
+
+function renderPlanModal() {
+  document.getElementById('plan-days').innerHTML = Object.keys(PROGRAMS).map(n =>
+    `<button class="sel-btn ${planSel.days == n ? 'active' : ''}" onclick="pickPlanDays(${n})">${n} أيام</button>`).join('');
+  const opts = planSel.days ? PROGRAMS[planSel.days] : [];
+  document.getElementById('plan-opt-row').style.display = opts.length > 1 ? 'block' : 'none';
+  document.getElementById('plan-options').innerHTML = opts.map(o =>
+    `<button class="sel-btn ${planSel.option === o.id ? 'active' : ''}" style="text-align:right;white-space:normal" onclick="pickPlanOption('${o.id}')">${o.label}</button>`).join('');
+  const p = planSel.days && findProgram(planSel.days, planSel.option);
+  document.getElementById('plan-preview').innerHTML = p
+    ? p.days.map(([label, keys], i) => `<div dir="ltr" style="text-align:left">Day ${i + 1} — ${label} (${keys.length})</div>`).join('') : '';
+  document.getElementById('plan-apply').disabled = !p;
+}
+
+function applyPlan() {
+  if (!planSel.days) return;
+  const p = findProgram(planSel.days, planSel.option);
+  data.plan = { days: planSel.days, option: p.id };
+  const days = buildDays(planSel.days, p.id);
+  if (!data.weeks.length) {
+    data.weeks.push({ name: 'Week 1', days });
+    curWeek = 0;
+  } else {
+    data.weeks[curWeek].days = days;
+  }
+  curDay = 0;
+  save(); closeModal('modal-plan'); renderLog(); toast('تم تحديث الجدول ✓');
+}
+
 function showAddExercise() { openModal('modal-ex'); }
 function addExercise() {
   const name = document.getElementById('new-ex-name').value.trim();
