@@ -681,7 +681,13 @@ const PROGRAMS = {
     ]},
   ],
 };
-const DEFAULT_SETS = 3;
+// Sets per exercise: big muscles 2, small muscles 3, fly/raise movements 3
+const BIG_MUSCLES = ['Chest','Back','Quads','Hamstrings','Glutes'];
+const FLY_KEYS = ['pecdeck','lateral','reardelt'];
+function setsFor(key) {
+  if (FLY_KEYS.includes(key)) return 3;
+  return BIG_MUSCLES.includes(EXC[key][1]) ? 2 : 3;
+}
 function newSet() { return { w: null, r: null, rir: null, done: false }; }
 function findProgram(days, id) {
   const opts = PROGRAMS[days] || [];
@@ -693,7 +699,7 @@ function buildDays(days, id) {
     name: `Day ${i + 1} — ${label}`, date: '', notes: '', time: '',
     exercises: keys.map(k => {
       const [name, muscle, url] = EXC[k];
-      return { name, muscle, url, sets: Array.from({ length: DEFAULT_SETS }, newSet) };
+      return { name, muscle, url, sets: Array.from({ length: setsFor(k) }, newSet) };
     }),
   }));
 }
