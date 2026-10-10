@@ -329,7 +329,7 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 .cal-legend span{display:inline-flex;align-items:center;gap:5px}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
 .cal-dow{text-align:center;font-size:10px;color:var(--t3);letter-spacing:.06em;padding-bottom:2px}
-.cal-cell{aspect-ratio:1;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;position:relative;transition:all .15s;padding:4px}
+.cal-cell{aspect-ratio:1;touch-action:manipulation;user-select:none;-webkit-user-select:none;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;position:relative;transition:all .15s;padding:4px}
 .cal-cell:hover{border-color:var(--border2)}
 .cal-cell.empty{background:transparent;border-color:transparent;cursor:default}
 .cal-cell.gym{background:var(--green-s);border-color:var(--green)}
@@ -515,7 +515,7 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
   </div>
   <div class="cal-legend">
     <span>💪 يوم نادي (تمرين)</span>
-    <span>⚽ يوم كورة — الاثنين تلقائياً (اضغط عليها لإخفائها)</span>
+    <span>⚽ يوم كورة — الاثنين تلقائياً (اضغط على اليوم مرتين لإضافتها أو إخفائها)</span>
   </div>
   <div class="cal-grid" id="cal-dow-row"></div>
   <div class="cal-grid" id="cal-grid" style="margin-top:6px"></div>
@@ -1727,11 +1727,28 @@ function toggleGymDay(dateStr) {
 }
 
 function toggleFootball(dateStr, ev) {
-  ev.stopPropagation();
+  if (ev) ev.stopPropagation();
   const cur = isFootballDay(dateStr);
   data.dayOverrides[dateStr] = { ...data.dayOverrides[dateStr], football: !cur };
   save();
   renderCalendar();
+}
+
+// Single tap = toggle gym day, double tap = toggle football day
+let calTapTimer = null, calTapDate = null;
+function calCellTap(dateStr) {
+  if (calTapTimer && calTapDate === dateStr) {
+    clearTimeout(calTapTimer);
+    calTapTimer = null; calTapDate = null;
+    toggleFootball(dateStr);
+    return;
+  }
+  if (calTapTimer) { clearTimeout(calTapTimer); toggleGymDay(calTapDate); }
+  calTapDate = dateStr;
+  calTapTimer = setTimeout(() => {
+    calTapTimer = null; calTapDate = null;
+    toggleGymDay(dateStr);
+  }, 300);
 }
 
 function calPrevMonth() {
@@ -1767,8 +1784,8 @@ function renderCalendar() {
     const gym = isGymDay(ds);
     const ball = isFootballDay(ds);
     const icon = (gym ? `<span class="cal-muscle" title="💪 يوم نادي">💪</span>` : '')
-      + (ball ? `<span class="cal-ball" onclick="toggleFootball('${ds}', event)" title="⚽ يوم كورة — اضغط للإخفاء">⚽</span>` : '');
-    cells += `<div class="cal-cell ${gym ? 'gym' : ''} ${ds === todayS ? 'today' : ''}" onclick="toggleGymDay('${ds}')" title="اضغط لتحديد/إلغاء يوم تمرين">
+      + (ball ? `<span class="cal-ball" title="⚽ يوم كورة — اضغط على اليوم مرتين للإخفاء">⚽</span>` : '');
+    cells += `<div class="cal-cell ${gym ? 'gym' : ''} ${ds === todayS ? 'today' : ''}" onclick="calCellTap('${ds}')" title="ضغطة: يوم تمرين — ضغطتين: يوم كورة">
       <div class="cal-daynum">${d}</div>
       <div class="cal-icons">${icon}</div>
     </div>`;
