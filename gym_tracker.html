@@ -236,6 +236,7 @@ details[open] .accordion-arrow{transform:rotate(90deg)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .sync-label{font-size:10px;color:var(--t3);letter-spacing:.05em}
 /* LOADING SCREEN */
+#build-tag{position:fixed;bottom:2px;left:5px;font-size:9px;color:var(--t3);opacity:.55;z-index:50;pointer-events:none;font-family:'IBM Plex Mono',monospace}
 #loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;gap:12px}
 .loading-logo{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:.1em;color:var(--t1)}
 .loading-logo span{color:var(--red)}
@@ -737,6 +738,27 @@ function forgetRememberedUser() {
   try { localStorage.removeItem('gymCurrentUser'); } catch(e) {}
 }
 
+// Last week/day the user was looking at, per user, so reopening the app comes
+// back to where they left off instead of Week 1 / Day 1.
+function posKey(uid) { return 'gymLastPos_' + uid; }
+function rememberPosition() {
+  if (!currentUserId) return;
+  try {
+    localStorage.setItem(posKey(currentUserId), JSON.stringify({ w: curWeek, d: curDay }));
+  } catch(e) {}
+}
+function restorePosition() {
+  curWeek = 0; curDay = 0;
+  if (!currentUserId || !data || !Array.isArray(data.weeks) || !data.weeks.length) return;
+  let pos = null;
+  try { pos = JSON.parse(localStorage.getItem(posKey(currentUserId)) || 'null'); } catch(e) {}
+  if (!pos) return;
+  // Clamp: weeks or days may have been deleted since the position was stored.
+  curWeek = Math.min(Math.max(0, parseInt(pos.w) || 0), data.weeks.length - 1);
+  const days = data.weeks[curWeek].days || [];
+  curDay = Math.min(Math.max(0, parseInt(pos.d) || 0), Math.max(0, days.length - 1));
+}
+
 function setSyncStatus(status) {
   const dot = document.getElementById('sync-dot');
   const lbl = document.getElementById('sync-label');
@@ -824,6 +846,7 @@ function deleteUser(id) {
   const users = getSavedUsers().filter(u => u.id !== id);
   saveUsersList(users);
   localStorage.removeItem(getLocalKey(id));
+  localStorage.removeItem(posKey(id));
   const remembered = getRememberedUser();
   if (remembered && remembered.id === id) forgetRememberedUser();
   renderSavedUsers();
@@ -868,6 +891,7 @@ async function loadUserData(uid) {
     window._currentData = data;
     if (remote) localStorage.setItem(getLocalKey(uid), JSON.stringify(data));
     setSyncStatus(remote ? 'saved' : 'error');
+    restorePosition();
     _resumeInProgressWorkout();
     document.getElementById('loading-screen').style.display = 'none';
     renderLog();
@@ -877,6 +901,7 @@ async function loadUserData(uid) {
 
   data = ensureData(localData);
   window._currentData = data;
+  restorePosition();
   _resumeInProgressWorkout();
   document.getElementById('loading-screen').style.display = 'none';
   renderLog();
@@ -889,7 +914,7 @@ async function loadUserData(uid) {
         data = ensureData(remote);
         window._currentData = data;
         localStorage.setItem(getLocalKey(uid), JSON.stringify(data));
-        curWeek = 0; curDay = 0;
+        restorePosition();
         _resumeInProgressWorkout();
         renderLog();
         toast('📡 تم تحميل البيانات من السحابة');
@@ -968,7 +993,14 @@ function renderLog() {
     document.getElementById('day-content').innerHTML = `<div style="text-align:center;padding:2rem 0"><button class="btn btn-red" onclick="showPlanModal(true)">اختر جدولك للبدء</button></div>`;
     return;
   }
+  // Clamp before indexing: a cloud sync or a deletion can leave the position
+  // pointing past the end of the data.
+  if (curWeek >= data.weeks.length) curWeek = data.weeks.length - 1;
+  if (curWeek < 0) curWeek = 0;
   const w = data.weeks[curWeek];
+  if (curDay >= w.days.length) curDay = Math.max(0, w.days.length - 1);
+  if (curDay < 0) curDay = 0;
+  rememberPosition();
   document.getElementById('week-title').textContent = w.name;
 
   // week tabs — with delete button per week
@@ -2080,5 +2112,6 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2200);
 }
 </script>
+<div id="build-tag">build 2026-10-25b</div>
 </body>
 </html>
