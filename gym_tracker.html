@@ -721,6 +721,22 @@ function saveUsersList(users) {
 }
 function getLocalKey(uid) { return 'gymData_' + uid; }
 
+// The logged-in user is remembered across app restarts, so closing the app
+// mid-workout and coming back later lands straight in the session instead of
+// the user picker. Cleared only by switching users or deleting the user.
+function getRememberedUser() {
+  try {
+    const u = JSON.parse(localStorage.getItem('gymCurrentUser') || 'null');
+    return (u && u.id) ? u : null;
+  } catch(e) { return null; }
+}
+function rememberUser(id, name) {
+  try { localStorage.setItem('gymCurrentUser', JSON.stringify({ id, name })); } catch(e) {}
+}
+function forgetRememberedUser() {
+  try { localStorage.removeItem('gymCurrentUser'); } catch(e) {}
+}
+
 function setSyncStatus(status) {
   const dot = document.getElementById('sync-dot');
   const lbl = document.getElementById('sync-label');
@@ -794,6 +810,7 @@ function loginUser() {
 
 function selectUser(id, name) {
   currentUserId = id;
+  rememberUser(id, name);
   document.getElementById('user-screen').style.display = 'none';
   document.getElementById('loading-screen').style.display = 'flex';
   // Show in nav
@@ -807,11 +824,14 @@ function deleteUser(id) {
   const users = getSavedUsers().filter(u => u.id !== id);
   saveUsersList(users);
   localStorage.removeItem(getLocalKey(id));
+  const remembered = getRememberedUser();
+  if (remembered && remembered.id === id) forgetRememberedUser();
   renderSavedUsers();
 }
 
 function switchUser() {
   if (!confirm('تبديل المستخدم؟ بياناتك الحالية محفوظة.')) return;
+  forgetRememberedUser();
   currentUserId = null;
   data = null;
   showUserScreen();
@@ -834,7 +854,16 @@ async function loadUserData(uid) {
     // No local copy: check the cloud before treating this as a first-time user
     document.getElementById('loading-screen').style.display = 'flex';
     let remote = null;
-    if (window._fbLoad) { try { remote = await window._fbLoad(uid); } catch(e) {} }
+    if (window._fbLoad) {
+      // Bounded wait: a stalled cloud read must not leave us on the loading
+      // screen forever now that login is restored automatically.
+      try {
+        remote = await Promise.race([
+          window._fbLoad(uid),
+          new Promise(res => setTimeout(() => res(null), 8000)),
+        ]);
+      } catch(e) {}
+    }
     data = ensureData(remote || { weeks: [] });
     window._currentData = data;
     if (remote) localStorage.setItem(getLocalKey(uid), JSON.stringify(data));
@@ -891,13 +920,26 @@ function _resumeInProgressWorkout() {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 async function initApp() {
+  const remembered = getRememberedUser();
+  if (remembered) {
+    // Keep the name in the saved list in sync in case it was only remembered
+    const users = getSavedUsers();
+    if (!users.some(u => u.id === remembered.id)) {
+      users.unshift({ id: remembered.id, name: remembered.name || remembered.id });
+      saveUsersList(users);
+    }
+    selectUser(remembered.id, remembered.name || remembered.id);
+    return;
+  }
   showUserScreen();
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
 
-// Safety fallback
+// Safety fallback: only bail out to the picker when nobody is logged in —
+// a logged-in user may legitimately still be waiting on the cloud load.
 setTimeout(() => {
+  if (currentUserId) return;
   if (document.getElementById('loading-screen')?.style.display !== 'none') {
     document.getElementById('loading-screen').style.display = 'none';
     showUserScreen();
