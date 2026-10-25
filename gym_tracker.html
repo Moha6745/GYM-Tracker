@@ -718,7 +718,9 @@ function getSavedUsers() {
   try { return JSON.parse(localStorage.getItem('gymUsers') || '[]'); } catch(e) { return []; }
 }
 function saveUsersList(users) {
-  localStorage.setItem('gymUsers', JSON.stringify(users));
+  // Best-effort: a full or restricted store must not abort the login that
+  // follows this call.
+  try { localStorage.setItem('gymUsers', JSON.stringify(users)); } catch(e) {}
 }
 function getLocalKey(uid) { return 'gymData_' + uid; }
 
@@ -944,27 +946,39 @@ function _resumeInProgressWorkout() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+let _initDone = false;
 async function initApp() {
+  if (_initDone) return;
+  _initDone = true;
+  // Restoring the session is the one step that must not be skipped, so it runs
+  // before anything that could throw (a full store, a bad saved list).
   const remembered = getRememberedUser();
   if (remembered) {
-    // Keep the name in the saved list in sync in case it was only remembered
-    const users = getSavedUsers();
-    if (!users.some(u => u.id === remembered.id)) {
-      users.unshift({ id: remembered.id, name: remembered.name || remembered.id });
-      saveUsersList(users);
-    }
     selectUser(remembered.id, remembered.name || remembered.id);
+    // Keep the saved list in sync; failing here must not undo the login above.
+    try {
+      const users = getSavedUsers();
+      if (!users.some(u => u.id === remembered.id)) {
+        users.unshift({ id: remembered.id, name: remembered.name || remembered.id });
+        saveUsersList(users);
+      }
+    } catch(e) {}
     return;
   }
   showUserScreen();
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
+// DOMContentLoaded has already fired if this script is reached late (a restored
+// page, a deferred parse), and the listener alone would then never run.
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);
+else initApp();
 
-// Safety fallback: only bail out to the picker when nobody is logged in —
-// a logged-in user may legitimately still be waiting on the cloud load.
+// Safety fallback for a stuck loading screen. It must never drop a remembered
+// user on the picker: if init never got there, log them in here instead.
 setTimeout(() => {
   if (currentUserId) return;
+  const remembered = getRememberedUser();
+  if (remembered) { selectUser(remembered.id, remembered.name || remembered.id); return; }
   if (document.getElementById('loading-screen')?.style.display !== 'none') {
     document.getElementById('loading-screen').style.display = 'none';
     showUserScreen();
@@ -2112,6 +2126,6 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2200);
 }
 </script>
-<div id="build-tag">build 2026-10-25b</div>
+<div id="build-tag">build 2026-10-25c</div>
 </body>
 </html>
